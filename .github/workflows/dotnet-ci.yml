@@ -26,7 +26,17 @@ jobs:
         dotnet-version: ${{ inputs.dotnet-version }}
 
     - name: Restore Dependencies
-      run: dotnet restore **/*.csproj
+      run: |
+          # Count .sln files in the root directory
+          SLN_COUNT=$(find . -maxdepth 1 -name "*.sln" | wc -l)
+
+          if [ "$SLN_COUNT" -gt 0 ]; then
+            echo "✅ Found Solution file(s) in root. Restoring via .sln..."
+            dotnet restore
+          else
+            echo "⚠️ No .sln found in root. Restoring all .csproj files recursively..."
+            find . -name "*.csproj" -exec dotnet restore {} +
+          fi
     
     - name: Build Repository
       run: dotnet build --configuration Release --no-restore
