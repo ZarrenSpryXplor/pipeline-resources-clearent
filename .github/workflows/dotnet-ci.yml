@@ -25,11 +25,14 @@ jobs:
       with:
         dotnet-version: ${{ inputs.dotnet-version }}
 
-    - name: Restore dependencies
-      run: dotnet restore
+    - name: Restore Dependencies
+      run: dotnet restore **/*.csproj
     
-    - name: Build
-      run: dotnet build --no-restore
+    - name: Build Repository
+      run: dotnet build --configuration Release --no-restore
     
-    - name: Test
-      run: dotnet test --no-build --no-restore --verbosity normal
+    - name: Run Tests
+      run: dotnet test --configuration Release --no-build --no-restore --verbosity normal
+
+    - name: Enforce .editorconfig Code Styles
+      run: dotnet format --verbosity detailed --verify-no-changes
