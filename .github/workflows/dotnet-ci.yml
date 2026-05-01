@@ -60,7 +60,7 @@ jobs:
     - name: ReportGenerator
       uses: danielpalme/ReportGenerator-GitHub-Action@5.5.7
       with:
-        reports: '**/coverage.cobertura.xml'
+        reports: '**/TestResults/**/coverage.cobertura.xml'
         targetdir: 'coveragereport'
         reporttypes: 'HtmlInline;MarkdownSummary'
         #customSettings: 'minimumCoverageThresholds:lineCoverage=80' 
