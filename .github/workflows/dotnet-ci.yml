@@ -49,13 +49,14 @@ jobs:
     
     - name: Run Tests
       run: > 
-        dotnet test --configuration Release 
-        --no-build 
-        --no-restore 
-        --verbosity normal 
-        "--filter:TestCategory!~Integration&Category!~Integration" 
-        --collect:"XPlat Code Coverage;Format=opencover,cobertura" 
-        -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SkipAutoProps=true DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude=[*Tests*]* DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeAssembliesWithoutSources=MissingAll DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SingleHit=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.IncludeTestAssembly=true DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.UseSourceLink=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.DeterministicReport=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByAttribute=Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute
+        dotnet test --configuration Release \
+        --no-build \
+        --no-restore \
+        --verbosity normal \
+        "--filter:TestCategory!~Integration&Category!~Integration" \
+        --collect:"XPlat Code Coverage;Format=opencover,cobertura" \
+        --results-directory ./TestResults \
+        -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SkipAutoProps=true DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude=[*Tests*]* DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeAssembliesWithoutSources=MissingAll DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SingleHit=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.IncludeTestAssembly=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.UseSourceLink=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.DeterministicReport=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByAttribute=Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute
 
     - name: ReportGenerator
       uses: danielpalme/ReportGenerator-GitHub-Action@5.5.7
