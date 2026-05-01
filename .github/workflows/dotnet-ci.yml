@@ -102,6 +102,15 @@ jobs:
           echo "status=pass" >> $GITHUB_OUTPUT
         fi
 
+    - name: Read Summary for Comment
+      id: read-summary
+      run: |
+        # Use a unique delimiter for the multi-line output
+        EOF=$(dd if=/dev/urandom bs=15 count=1 2>/dev/null | base64)
+        echo "summary<<$EOF" >> $GITHUB_OUTPUT
+        cat coveragereport/Summary.md >> $GITHUB_OUTPUT
+        echo "$EOF" >> $GITHUB_OUTPUT
+
     - name: Post PR Comment
       uses: mshick/add-pr-comment@v3
       if: github.event_name == 'pull_request'
@@ -109,7 +118,7 @@ jobs:
         message-id: coverage-report
         message: |
           ### 📊 Code Coverage Summary
-          $(cat coveragereport/Summary.md)
+          ${{ steps.read-summary.outputs.summary }}
             
           **Regression Check**: ${{ steps.coverage-logic.outputs.status == 'pass' && '✅ Passed' || '❌ Failed' }}
           * New: `${{ steps.coverage-logic.outputs.new_pct }}%` | Baseline: `${{ steps.coverage-logic.outputs.baseline_pct }}%`
@@ -117,6 +126,9 @@ jobs:
           ---
           🔍 [View Run Summary](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
         refresh-message-position: true
+
+    - name: Enforce .editorconfig Code Styles
+      run: dotnet format --verbosity detailed --verify-no-changes
 
     - name: Final Gate
       if: steps.coverage-logic.outputs.status == 'fail'
@@ -129,5 +141,4 @@ jobs:
       with:
         name: coverage-baseline
         path: coverage.txt
-    - name: Enforce .editorconfig Code Styles
-      run: dotnet format --verbosity detailed --verify-no-changes
+
