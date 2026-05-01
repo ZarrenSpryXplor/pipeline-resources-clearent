@@ -51,5 +51,15 @@ jobs:
         --collect:"XPlat Code Coverage;Format=opencover,cobertura" 
         -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SkipAutoProps=true DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude=[*Tests*]* DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeAssembliesWithoutSources=MissingAll DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SingleHit=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.IncludeTestAssembly=true DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.UseSourceLink=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.DeterministicReport=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByAttribute=Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute
 
+    - name: ReportGenerator
+      uses: danielpalme/ReportGenerator@v5.5.7
+      with:
+        reports: '**/coverage.cobertura.xml'
+        targetdir: 'coveragereport'
+        reporttypes: 'HtmlInline;MarkdownSummary'
+        customSettings: 'minimumCoverageThresholds:lineCoverage=80' 
+
+    - name: Publish Coverage Summary
+      run: cat coveragereport/Summary.md >> $GITHUB_STEP_SUMMARY
     - name: Enforce .editorconfig Code Styles
       run: dotnet format --verbosity detailed --verify-no-changes
