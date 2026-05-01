@@ -125,7 +125,7 @@ jobs:
             
           ---
           🔍 [View Run Summary](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-        refresh-message-position: true
+        update-only: true
 
     - name: Enforce .editorconfig Code Styles
       run: dotnet format --verbosity detailed --verify-no-changes
