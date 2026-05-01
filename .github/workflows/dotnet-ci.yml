@@ -12,6 +12,12 @@ on:
         type: string
         default: '8.0.x'
 
+      fallback-threshold:
+        description: 'Fallback coverage percentage threshold to use when no baseline is available.'
+        required: false
+        type: string
+        default: '0.0'
+
 jobs:
   build:
 
@@ -61,5 +67,67 @@ jobs:
 
     - name: Publish Coverage Summary
       run: cat coveragereport/Summary.md >> $GITHUB_STEP_SUMMARY
+
+    - name: Upload HTML Report Artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: full-coverage-report
+        path: coveragereport
+
+    - name: Calculate & Compare Coverage
+      id: coverage-logic
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # 1. Extract new percentage
+        NEW_PCT=$(grep -oE "[0-9]+(\.[0-9]+)?%" coveragereport/Summary.md | head -1 | tr -d '%')
+        echo "new_pct=$NEW_PCT" >> $GITHUB_OUTPUT
+          
+        # 2. Fetch baseline from the App Repo's default branch
+        DEFAULT_BRANCH=${{ github.event.repository.default_branch }}
+          
+        # Use 'gh' to find the artifact in the CALLER repo
+        # We redirect stderr to dev/null to handle the 'no artifact found' case gracefully
+        gh run download --name coverage-baseline \
+                        --branch "$DEFAULT_BRANCH" \
+                        --repo "${{ github.repository }}" 2>/dev/null || echo "${{ inputs.fallback-threshold }}" > coverage.txt
+          
+        BASELINE=$(cat coverage.txt)
+        echo "baseline_pct=$BASELINE" >> $GITHUB_OUTPUT
+
+        # 3. Comparison
+        if (( $(echo "$NEW_PCT < $BASELINE" | bc -l) )); then
+          echo "status=fail" >> $GITHUB_OUTPUT
+        else
+          echo "status=pass" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Post PR Comment
+      uses: mshick/add-pr-comment@v3
+      if: github.event_name == 'pull_request'
+      with:
+        message-id: coverage-report
+        message: |
+          ### 📊 Code Coverage Summary
+          $(cat coveragereport/Summary.md)
+            
+          **Regression Check**: ${{ steps.coverage-logic.outputs.status == 'pass' && '✅ Passed' || '❌ Failed' }}
+          * New: `${{ steps.coverage-logic.outputs.new_pct }}%` | Baseline: `${{ steps.coverage-logic.outputs.baseline_pct }}%`
+            
+          ---
+          🔍 [View Run Summary](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+        refresh-message-position: true
+
+    - name: Final Gate
+      if: steps.coverage-logic.outputs.status == 'fail'
+      run: exit 1
+
+    # This step ensures that if we are on the default branch, we update the baseline for future PRs
+    - name: Update Baseline Artifact
+      if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      uses: actions/upload-artifact@v7
+      with:
+        name: coverage-baseline
+        path: coverage.txt
     - name: Enforce .editorconfig Code Styles
       run: dotnet format --verbosity detailed --verify-no-changes
