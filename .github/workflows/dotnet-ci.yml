@@ -43,10 +43,15 @@ jobs:
             echo "⚠️ No .sln found in root. Restoring all .csproj files recursively..."
             find . -name "*.csproj" -exec dotnet restore {} +
           fi
-    
+
+    - name: Dependency Review
+      uses: actions/dependency-review-action@v4
+      with:
+        comment-summary-in-pr: always
+
     - name: Build Repository
       run: dotnet build --configuration Release --no-restore
-    
+
     - name: Run Tests
       run: | 
         dotnet test --configuration Release \
