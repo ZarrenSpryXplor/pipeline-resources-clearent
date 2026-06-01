@@ -18,6 +18,16 @@ on:
         type: string
         default: '0.0'
 
+      base_ref:
+        description: 'Base branch for comparison'
+        type: string
+        required: false
+        
+      head_ref:
+        description: 'Head branch containing changes'
+        type: string
+        required: false
+
 jobs:
   build:
 
@@ -48,6 +58,8 @@ jobs:
       uses: actions/dependency-review-action@v4
       with:
         comment-summary-in-pr: always
+        base-ref: ${{ inputs.base_ref }}
+        head-ref: ${{ inputs.head_ref }}
 
     - name: Build Repository
       run: dotnet build --configuration Release --no-restore
