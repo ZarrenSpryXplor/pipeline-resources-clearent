@@ -6,13 +6,13 @@ name: .NET Continuous Integration
 on:
   workflow_call:
     inputs:
-      dotnet-version:
+      dotnet_version:
         description: 'The .NET SDK version to use for the build and test steps.'
         required: true
         type: string
         default: '8.0.x'
 
-      fallback-threshold:
+      fallback_threshold:
         description: 'Fallback coverage percentage threshold to use when no baseline is available.'
         required: false
         type: string
@@ -28,6 +28,18 @@ on:
         type: string
         required: false
 
+      nuget_package:
+        description: 'Toggle to indicate whether this is a NuGet build'
+        required: false
+        type: boolean
+        default: false
+
+      upload_artifact:
+        description: 'Toggle to upload build artifacts'
+        required: true
+        type: boolean
+        default: false
+
 jobs:
   build:
 
@@ -39,7 +51,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v5
       with:
-        dotnet-version: ${{ inputs.dotnet-version }}
+        dotnet-version: ${{ inputs.dotnet_version }}
 
     - name: Restore Dependencies
       run: |
@@ -89,7 +101,7 @@ jobs:
     - name: Upload HTML Report Artifact
       uses: actions/upload-artifact@v7
       with:
-        name: code-coverage-report-${{ inputs.dotnet-version }}
+        name: code-coverage-report-${{ inputs.dotnet_version }}
         path: coveragereport
 
     - name: Calculate & Compare Coverage
@@ -108,7 +120,7 @@ jobs:
         # We redirect stderr to dev/null to handle the 'no artifact found' case gracefully
         gh run download --name coverage-baseline \
                         --branch "$DEFAULT_BRANCH" \
-                        --repo "${{ github.repository }}" 2>/dev/null || echo "${{ inputs.fallback-threshold }}" > coverage.txt
+                        --repo "${{ github.repository }}" 2>/dev/null || echo "${{ inputs.fallback_threshold }}" > coverage.txt
           
         BASELINE=$(cat coverage.txt)
         echo "baseline_pct=$BASELINE" >> $GITHUB_OUTPUT
@@ -160,3 +172,24 @@ jobs:
         name: coverage-baseline
         path: coverage.txt
 
+    - name: Pack NuGet Package
+      if: ${{ inputs.nuget_package == true && inputs.upload_artifact == true }}
+      run: |
+          # Count .sln files in the root directory
+          SLN_COUNT=$(find . -maxdepth 1 -name "*.sln" | wc -l)
+
+          if [ "$SLN_COUNT" -gt 0 ]; then
+            echo "✅ Found Solution file(s) in root. Packing solution..."
+            dotnet pack --configuration Release --no-build --output ./dist
+          else
+            echo "⚠️ No .sln found in root. Packing eligible .csproj files recursively..."
+            find . \( -path "./test" -o -path "./test/*" -o -path "./sample" -o -path "./sample/*" \) -prune -o -name "*.csproj" ! -name "*Tests*.csproj" ! -name "*Sample*.csproj" -exec dotnet pack --configuration Release --no-build --output ./dist {} +
+          fi
+
+    - name: Publish to GitHub Packages
+      if: ${{ inputs.nuget_package == true && inputs.upload_artifact == true }}
+      run: |
+          echo "Publishing NuGet packages to GitHub Packages..."
+          for nupkg in ./dist/*.nupkg; do
+            dotnet nuget push "$nupkg" --source "github" --skip-duplicate
+          done
