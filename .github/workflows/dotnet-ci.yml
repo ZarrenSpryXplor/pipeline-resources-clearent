@@ -12,8 +12,8 @@ on:
         type: string
         default: '8.0.x'
 
-      fallback_threshold:
-        description: 'Fallback coverage percentage threshold for pull requests to use when no baseline is available.'
+      baseline_coverage_threshold:
+        description: 'Baseline coverage percentage threshold for pull requests to use when no baseline is defined in the coverage.txt in the main branch.'
         required: false
         type: string
         default: '0.0'
@@ -106,13 +106,38 @@ jobs:
         --results-directory ./TestResults \
         -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SkipAutoProps=true DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude=[*Tests*]* DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeAssembliesWithoutSources=MissingAll DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SingleHit=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.IncludeTestAssembly=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.UseSourceLink=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.DeterministicReport=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByAttribute=Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute
 
+    - name: Resolve Coverage Threshold
+      id: coverage-threshold
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+
+        DEFAULT_BRANCH=${{ github.event.repository.default_branch }}
+        MINIMUM="${{ inputs.minimum_coverage_threshold }}"
+        BASELINE=""
+
+        if gh run download --name coverage-baseline \
+                          --branch "$DEFAULT_BRANCH" \
+                          --repo "${{ github.repository }}" 2>/dev/null && [ -f coverage.txt ]; then
+          BASELINE=$(cat coverage.txt)
+        else
+          BASELINE="${{ inputs.baseline_coverage_threshold }}"
+          echo "$BASELINE" > coverage.txt
+        fi
+
+        EFFECTIVE_THRESHOLD=$(awk "BEGIN { b=$BASELINE; m=$MINIMUM; if (b > m) printf \"%.2f\", b; else printf \"%.2f\", m }")
+
+        echo "baseline_value=$BASELINE" >> $GITHUB_OUTPUT
+        echo "effective_threshold=$EFFECTIVE_THRESHOLD" >> $GITHUB_OUTPUT
+
     - name: ReportGenerator
       uses: danielpalme/ReportGenerator-GitHub-Action@5.5.7
       with:
         reports: '**/TestResults/**/coverage.cobertura.xml'
         targetdir: 'coveragereport'
         reporttypes: 'HtmlInline;MarkdownSummary'
-        customSettings: 'minimumCoverageThresholds:lineCoverage=${{ inputs.minimum_coverage_threshold }}'
+        customSettings: 'minimumCoverageThresholds:lineCoverage=${{ steps.coverage-threshold.outputs.effective_threshold }}'
 
     - name: Publish Coverage Summary
       run: cat coveragereport/Summary.md >> $GITHUB_STEP_SUMMARY
@@ -128,25 +153,15 @@ jobs:
     - name: Calculate & Compare Coverage
       id: coverage-logic
       if: github.event_name == 'pull_request'
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         # 1. Extract new percentage from Cobertura XML for stable parsing.
         COVERAGE_FILE=$(find . -path "*/TestResults/*/coverage.cobertura.xml" | head -1)
         NEW_RATIO=$(grep -oPm1 '(?<=line-rate=")[0-9.]+' "$COVERAGE_FILE")
         NEW_PCT=$(awk "BEGIN { printf \"%.2f\", $NEW_RATIO * 100 }")
         echo "new_pct=$NEW_PCT" >> $GITHUB_OUTPUT
-          
-        # 2. Fetch baseline from the App Repo's default branch
-        DEFAULT_BRANCH=${{ github.event.repository.default_branch }}
-          
-        # Use 'gh' to find the artifact in the CALLER repo
-        # We redirect stderr to dev/null to handle the 'no artifact found' case gracefully
-        gh run download --name coverage-baseline \
-                        --branch "$DEFAULT_BRANCH" \
-                        --repo "${{ github.repository }}" 2>/dev/null || echo "${{ inputs.fallback_threshold }}" > coverage.txt
-          
-        BASELINE=$(cat coverage.txt)
+
+        # 2. Use resolved baseline value from the threshold step.
+        BASELINE="${{ steps.coverage-threshold.outputs.baseline_value }}"
         echo "baseline_pct=$BASELINE" >> $GITHUB_OUTPUT
 
         # 3. Comparison
