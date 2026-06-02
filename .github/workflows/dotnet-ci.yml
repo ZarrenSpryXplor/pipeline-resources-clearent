@@ -13,37 +13,55 @@ on:
         default: '8.0.x'
 
       fallback_threshold:
-        description: 'Fallback coverage percentage threshold to use when no baseline is available.'
+        description: 'Fallback coverage percentage threshold for pull requests to use when no baseline is available.'
         required: false
         type: string
         default: '0.0'
 
+      minimum_coverage_threshold:
+        description: 'Minimum overall line coverage threshold, enforced by ReportGenerator.'
+        required: false
+        type: string
+        default: '80'
+
       base_ref:
-        description: 'Base branch for comparison'
+        description: 'Base branch for comparison in pull requests'
         type: string
         required: false
         
       head_ref:
-        description: 'Head branch containing changes'
+        description: 'Head branch containing changes for pull requests'
         type: string
         required: false
 
       nuget_package:
-        description: 'Toggle to indicate whether this is a NuGet build'
+        description: 'Toggle to indicate whether this is a NuGet build (determines whether nuget pack should run)'
         required: false
         type: boolean
         default: false
 
       upload_artifact:
-        description: 'Toggle to upload build artifacts'
+        description: 'Toggle to upload build artifacts (not necessary for pull request runs)'
         required: true
         type: boolean
         default: false
+
+      artifact_retention_days:
+        description: 'Number of days to retain workflow artifacts.'
+        required: false
+        type: string
+        default: '90'
 
 jobs:
   build:
 
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
 
     steps:
     - uses: actions/checkout@v6
@@ -67,6 +85,7 @@ jobs:
           fi
 
     - name: Dependency Review
+      if: github.event_name == 'pull_request'
       uses: actions/dependency-review-action@v4
       with:
         comment-summary-in-pr: always
@@ -93,7 +112,7 @@ jobs:
         reports: '**/TestResults/**/coverage.cobertura.xml'
         targetdir: 'coveragereport'
         reporttypes: 'HtmlInline;MarkdownSummary'
-        #customSettings: 'minimumCoverageThresholds:lineCoverage=80' 
+        customSettings: 'minimumCoverageThresholds:lineCoverage=${{ inputs.minimum_coverage_threshold }}'
 
     - name: Publish Coverage Summary
       run: cat coveragereport/Summary.md >> $GITHUB_STEP_SUMMARY
@@ -103,14 +122,19 @@ jobs:
       with:
         name: code-coverage-report-${{ inputs.dotnet_version }}
         path: coveragereport
+        retention-days: ${{ inputs.artifact_retention_days }}
 
+    # Coverage regression is evaluated only for pull requests.
     - name: Calculate & Compare Coverage
       id: coverage-logic
+      if: github.event_name == 'pull_request'
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # 1. Extract new percentage
-        NEW_PCT=$(grep -oE "[0-9]+(\.[0-9]+)?%" coveragereport/Summary.md | head -1 | tr -d '%')
+        # 1. Extract new percentage from Cobertura XML for stable parsing.
+        COVERAGE_FILE=$(find . -path "*/TestResults/*/coverage.cobertura.xml" | head -1)
+        NEW_RATIO=$(grep -oPm1 '(?<=line-rate=")[0-9.]+' "$COVERAGE_FILE")
+        NEW_PCT=$(awk "BEGIN { printf \"%.2f\", $NEW_RATIO * 100 }")
         echo "new_pct=$NEW_PCT" >> $GITHUB_OUTPUT
           
         # 2. Fetch baseline from the App Repo's default branch
@@ -132,8 +156,19 @@ jobs:
           echo "status=pass" >> $GITHUB_OUTPUT
         fi
 
+    - name: Prepare Baseline Coverage File
+      if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      run: |
+        # Build baseline from Cobertura XML on default-branch non-PR runs.
+        COVERAGE_FILE=$(find . -path "*/TestResults/*/coverage.cobertura.xml" | head -1)
+        BASELINE_RATIO=$(grep -oPm1 '(?<=line-rate=")[0-9.]+' "$COVERAGE_FILE")
+        BASELINE_PCT=$(awk "BEGIN { printf \"%.2f\", $BASELINE_RATIO * 100 }")
+        echo "$BASELINE_PCT" > coverage.txt
+
+    # PR comment formatting and posting are skipped for non-PR runs.
     - name: Read Summary for Comment
       id: read-summary
+      if: github.event_name == 'pull_request'
       run: |
         # Use a unique delimiter for the multi-line output
         EOF=$(dd if=/dev/urandom bs=15 count=1 2>/dev/null | base64)
@@ -160,8 +195,9 @@ jobs:
     - name: Enforce .editorconfig Code Styles
       run: dotnet format --verbosity detailed --verify-no-changes
 
+    # Fail PR runs when regression check reports lower coverage than baseline.
     - name: Final Gate
-      if: steps.coverage-logic.outputs.status == 'fail'
+      if: github.event_name == 'pull_request' && steps.coverage-logic.outputs.status == 'fail'
       run: exit 1
 
     # This step ensures that if we are on the default branch, we update the baseline for future PRs
@@ -171,6 +207,7 @@ jobs:
       with:
         name: coverage-baseline
         path: coverage.txt
+        retention-days: ${{ inputs.artifact_retention_days }}
 
     - name: Pack NuGet Package
       if: ${{ inputs.nuget_package == true && inputs.upload_artifact == true }}
@@ -186,10 +223,84 @@ jobs:
             find . \( -path "./test" -o -path "./test/*" -o -path "./sample" -o -path "./sample/*" \) -prune -o -name "*.csproj" ! -name "*Tests*.csproj" ! -name "*Sample*.csproj" -exec dotnet pack --configuration Release --no-build --output ./dist {} +
           fi
 
-    - name: Publish to GitHub Packages
+    - name: Upload NuGet Artifact
       if: ${{ inputs.nuget_package == true && inputs.upload_artifact == true }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: nuget-dist
+        path: ./dist
+        retention-days: ${{ inputs.artifact_retention_days }}
+
+  publish:
+    if: ${{ inputs.nuget_package == true && inputs.upload_artifact == true }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: ${{ inputs.dotnet_version }}
+
+    - name: Download NuGet Artifact
+      uses: actions/download-artifact@v7
+      with:
+        name: nuget-dist
+        path: ./dist
+
+    - name: Publish to GitHub Packages
+      env:
+          GITHUB_USERNAME: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ORG: ${{ github.repository_owner }}
       run: |
+          set -euo pipefail
+
+          CONFIG_FILE="./nuget.config"
+          TEMP_CONFIG="$RUNNER_TEMP/nuget.publish.config"
+
+          cleanup() {
+            rm -f "$TEMP_CONFIG"
+          }
+          trap cleanup EXIT
+
+          if [ -f "$CONFIG_FILE" ]; then
+            cp "$CONFIG_FILE" "$TEMP_CONFIG"
+          else
+            printf '%s\n' \
+              '<?xml version="1.0" encoding="utf-8"?>' \
+              '<configuration>' \
+              '  <packageSources>' \
+              '    <clear />' \
+              '    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />' \
+              '  </packageSources>' \
+              '</configuration>' > "$TEMP_CONFIG"
+          fi
+
+          if dotnet nuget list source --configfile "$TEMP_CONFIG" | grep -qi "github"; then
+            dotnet nuget update source github \
+              --source "https://nuget.pkg.github.com/$GITHUB_ORG/index.json" \
+              --username "$GITHUB_USERNAME" \
+              --password "$GITHUB_TOKEN" \
+              --store-password-in-clear-text \
+              --configfile "$TEMP_CONFIG"
+          else
+            dotnet nuget add source "https://nuget.pkg.github.com/$GITHUB_ORG/index.json" \
+              --name github \
+              --username "$GITHUB_USERNAME" \
+              --password "$GITHUB_TOKEN" \
+              --store-password-in-clear-text \
+              --configfile "$TEMP_CONFIG"
+          fi
+
           echo "Publishing NuGet packages to GitHub Packages..."
           for nupkg in ./dist/*.nupkg; do
-            dotnet nuget push "$nupkg" --source "github" --skip-duplicate
+            dotnet nuget push "$nupkg" --source "github" --skip-duplicate --configfile "$TEMP_CONFIG"
           done
