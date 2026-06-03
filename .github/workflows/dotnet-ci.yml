@@ -98,7 +98,7 @@ jobs:
         TOOL_REPOSITORY: ${{ inputs.tool_package_repository }}
       run: |
         set -euo pipefail
-
+        dotnet --list-sdks
         if [ -n "${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT }}" ]; then
           echo "Using PAT-based package read authentication."
         else
@@ -219,8 +219,21 @@ jobs:
           '</configuration>' \
           > "$TEMP_CONFIG"
 
-        dotnet tool update Xplor.AI.Metrics.BuildTool --tool-path "$TOOL_PATH" --configfile "$TEMP_CONFIG" || \
-        dotnet tool install Xplor.AI.Metrics.BuildTool --tool-path "$TOOL_PATH" --configfile "$TEMP_CONFIG"
+        set +e
+        INSTALL_OUTPUT=$(dotnet tool install Xplor.AI.Metrics.BuildTool --tool-path "$TOOL_PATH" --configfile "$TEMP_CONFIG" 2>&1)
+        INSTALL_EXIT_CODE=$?
+        set -e
+
+        printf '%s\n' "$INSTALL_OUTPUT"
+
+        if [ "$INSTALL_EXIT_CODE" -ne 0 ]; then
+          if printf '%s\n' "$INSTALL_OUTPUT" | grep -q "DotnetToolSettings.xml"; then
+            echo "::error::Package Xplor.AI.Metrics.BuildTool is published as a NuGet package but is not packed as a .NET tool."
+            echo "::error::In the package repo, set <PackAsTool>true</PackAsTool> and <ToolCommandName>...</ToolCommandName> in the executable project, then republish."
+          fi
+
+          exit "$INSTALL_EXIT_CODE"
+        fi
 
         rm -f "$TEMP_CONFIG"
         echo "$TOOL_PATH" >> $GITHUB_PATH
