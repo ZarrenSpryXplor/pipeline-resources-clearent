@@ -105,7 +105,8 @@ jobs:
           exit 1
         fi
 
-        TOOL_PACKAGE="Xplor.AI.Metrics.BuildTool"
+        # v3-flatcontainer requires lowercase package IDs
+        TOOL_PACKAGE="xplor.ai.metrics.buildtool"
         TOOL_INDEX_URL="https://nuget.pkg.github.com/$GITHUB_ORG/v3-flatcontainer/$TOOL_PACKAGE/index.json"
         TOOL_STATUS=$(curl -sS -o /dev/null -w "%{http_code}" -u "$GITHUB_USERNAME:$GITHUB_TOKEN" "$TOOL_INDEX_URL")
 
