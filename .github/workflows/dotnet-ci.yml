@@ -73,10 +73,18 @@ jobs:
       with:
         dotnet-version: ${{ inputs.dotnet_version }}
 
+    - name: Generate Xplor Pay Package Reader App Token
+      id: package-reader-token
+      uses: actions/create-github-app-token@v3
+      with:
+        client-id: ${{ secrets.XPLOR_PAY_PACKAGE_READER_APP_CLIENT_ID }}
+        private-key: ${{ secrets.XPLOR_PAY_PACKAGE_READER_APP_PRIVATE_KEY }}
+        owner: ${{ github.repository_owner }}
+
     - name: Verify Authentication to GitHub Packages
       env:
-        GITHUB_USERNAME: ${{ github.actor }}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_USERNAME: x-access-token
+        GITHUB_TOKEN: ${{ steps.package-reader-token.outputs.token }}
         GITHUB_ORG: ${{ github.repository_owner }}
       run: |
         set -euo pipefail
@@ -95,6 +103,19 @@ jobs:
         if [ "$STATUS" != "200" ]; then
           echo "::error::GitHub Packages auth preflight failed (HTTP $STATUS) for $FEED_URL. Verify caller permissions and package access settings."
           exit 1
+        fi
+
+        TOOL_PACKAGE="xplor.ai.metrics.buildtool"
+        TOOL_INDEX_URL="https://nuget.pkg.github.com/$GITHUB_ORG/v3-flatcontainer/$TOOL_PACKAGE/index.json"
+        TOOL_STATUS=$(curl -sS -o /dev/null -w "%{http_code}" -u "$GITHUB_USERNAME:$GITHUB_TOKEN" "$TOOL_INDEX_URL")
+
+        if [ "$TOOL_STATUS" = "403" ]; then
+          echo "::error::Token can read feed index but is forbidden from package metadata ($TOOL_INDEX_URL). Ensure package access is granted to the caller repository/workflow token."
+          exit 1
+        fi
+
+        if [ "$TOOL_STATUS" = "404" ]; then
+          echo "::warning::Tool package metadata not found at $TOOL_INDEX_URL. Verify package ID and published versions."
         fi
 
         echo "GitHub Packages auth preflight succeeded (HTTP $STATUS)."
@@ -122,17 +143,47 @@ jobs:
 
     - name: Install Xplor.AI.Metrics.BuildTool
       env:
-        GITHUB_USERNAME: ${{ github.actor }}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_USERNAME: x-access-token
+        GITHUB_TOKEN: ${{ steps.package-reader-token.outputs.token }}
         GITHUB_ORG: ${{ github.repository_owner }}
       run: |
         set -euo pipefail
 
         TOOL_PATH="${{ runner.temp }}/tools"
+        TEMP_CONFIG="${{ runner.temp }}/nuget.tool.config"
 
-        dotnet tool update Xplor.AI.Metrics.BuildTool --tool-path "$TOOL_PATH" --configfile ./nuget.config ||
+        if [ -f ./nuget.config ]; then
+          cp ./nuget.config "$TEMP_CONFIG"
+        else
+          printf '%s\n' \
+            '<?xml version="1.0" encoding="utf-8"?>' \
+            '<configuration>' \
+            '  <packageSources>' \
+            '    <clear />' \
+            '    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />' \
+            '  </packageSources>' \
+            '</configuration>' > "$TEMP_CONFIG"
+        fi
+
+        if dotnet nuget list source --configfile "$TEMP_CONFIG" | grep -qi "github"; then
+          dotnet nuget update source github \
+            --source "https://nuget.pkg.github.com/$GITHUB_ORG/index.json" \
+            --username "$GITHUB_USERNAME" \
+            --password "$GITHUB_TOKEN" \
+            --store-password-in-clear-text \
+            --configfile "$TEMP_CONFIG"
+        else
+          dotnet nuget add source "https://nuget.pkg.github.com/$GITHUB_ORG/index.json" \
+            --name github \
+            --username "$GITHUB_USERNAME" \
+            --password "$GITHUB_TOKEN" \
+            --store-password-in-clear-text \
+            --configfile "$TEMP_CONFIG"
+        fi
+
+        dotnet tool update Xplor.AI.Metrics.BuildTool --tool-path "$TOOL_PATH" --configfile "$TEMP_CONFIG" ||
         
-        dotnet tool install Xplor.AI.Metrics.BuildTool --tool-path "$TOOL_PATH" --configfile ./nuget.config
+        dotnet tool install Xplor.AI.Metrics.BuildTool --tool-path "$TOOL_PATH" --configfile "$TEMP_CONFIG"
         
         echo "$TOOL_PATH" >> $GITHUB_PATH
 
@@ -293,6 +344,7 @@ jobs:
         retention-days: ${{ inputs.artifact_retention_days }}
 
   publish:
+    name: Publish NuGet Package(s) to GitHub Packages
     if: ${{ inputs.nuget_package == true && inputs.upload_artifact == true }}
     needs: build
     runs-on: ubuntu-latest
@@ -311,6 +363,14 @@ jobs:
       with:
         dotnet-version: ${{ inputs.dotnet_version }}
 
+    - name: Generate Xplor Pay Package Writer App Token
+      id: package-writer-token
+      uses: actions/create-github-app-token@v3
+      with:
+        client-id: ${{ secrets.XPLOR_PAY_PACKAGE_WRITER_APP_CLIENT_ID }}
+        private-key: ${{ secrets.XPLOR_PAY_PACKAGE_WRITER_APP_PRIVATE_KEY }}
+        owner: ${{ github.repository_owner }}
+
     - name: Download NuGet Package(s) from Actions Artifact Storage for Publish to GitHub Packages
       uses: actions/download-artifact@v7
       with:
@@ -319,8 +379,8 @@ jobs:
 
     - name: Publish NuGet Package(s)to GitHub Packages
       env:
-          GITHUB_USERNAME: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_USERNAME: x-access-token
+          GITHUB_TOKEN: ${{ steps.package-writer-token.outputs.token }}
           GITHUB_ORG: ${{ github.repository_owner }}
       run: |
           set -euo pipefail
