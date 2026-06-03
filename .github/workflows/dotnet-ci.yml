@@ -105,18 +105,23 @@ jobs:
           exit 1
         fi
 
-        # v3-flatcontainer requires lowercase package IDs
-        TOOL_PACKAGE="xplor.ai.metrics.buildtool"
-        TOOL_INDEX_URL="https://nuget.pkg.github.com/$GITHUB_ORG/v3-flatcontainer/$TOOL_PACKAGE/index.json"
-        TOOL_STATUS=$(curl -sS -o /dev/null -w "%{http_code}" -u "$GITHUB_USERNAME:$GITHUB_TOKEN" "$TOOL_INDEX_URL")
+        # GitHub Packages NuGet does not use a v3-flatcontainer path; use the NuGet search/query endpoint instead
+        TOOL_SEARCH_URL="https://nuget.pkg.github.com/$GITHUB_ORG/query?q=Xplor.AI.Metrics.BuildTool&prerelease=false&take=1"
+        TOOL_STATUS=$(curl -sS -o /tmp/tool_search.json -w "%{http_code}" -u "$GITHUB_USERNAME:$GITHUB_TOKEN" "$TOOL_SEARCH_URL")
 
         if [ "$TOOL_STATUS" = "403" ]; then
-          echo "::error::Token can read feed index but is forbidden from package metadata ($TOOL_INDEX_URL). Ensure package access is granted to the caller repository/workflow token."
+          echo "::error::Token can reach the feed index but is forbidden from querying package metadata. Verify the GitHub App has packages:read and contents:read and is installed on the repository that owns Xplor.AI.Metrics.BuildTool."
           exit 1
         fi
 
-        if [ "$TOOL_STATUS" = "404" ]; then
-          echo "::warning::Tool package metadata not found at $TOOL_INDEX_URL. Verify package ID and published versions."
+        if [ "$TOOL_STATUS" = "200" ]; then
+          TOTAL_HITS=$(python3 -c "import json; d=json.load(open('/tmp/tool_search.json')); print(d.get('totalHits',0))" 2>/dev/null || echo "unknown")
+          echo "Tool package search succeeded (HTTP 200, totalHits: $TOTAL_HITS)."
+          if [ "$TOTAL_HITS" = "0" ]; then
+            echo "::warning::Search returned 0 results for Xplor.AI.Metrics.BuildTool. Verify the package ID and that it is published to the xplor-pay GitHub Packages feed."
+          fi
+        else
+          echo "::warning::Tool package search returned HTTP $TOOL_STATUS. Package visibility to this token could not be confirmed."
         fi
 
         echo "GitHub Packages auth preflight succeeded (HTTP $STATUS)."
@@ -144,17 +149,37 @@ jobs:
 
     - name: Install Xplor.AI.Metrics.BuildTool
       env:
-        GITHUB_USERNAME: x-access-token
-        GITHUB_TOKEN: ${{ steps.package-reader-token.outputs.token }}
+        NUGET_APP_TOKEN: ${{ steps.package-reader-token.outputs.token }}
         GITHUB_ORG: ${{ github.repository_owner }}
       run: |
         set -euo pipefail
 
         TOOL_PATH="${{ runner.temp }}/tools"
+        TEMP_CONFIG="${{ runner.temp }}/nuget.tool.config"
 
-        dotnet tool update Xplor.AI.Metrics.BuildTool --tool-path "$TOOL_PATH" --configfile ./nuget.config || \
-        dotnet tool install Xplor.AI.Metrics.BuildTool --tool-path "$TOOL_PATH" --configfile ./nuget.config
+        # Write credentials directly into the config file so NuGet never performs env var
+        # substitution. NuGet's %VAR% expansion behaves inconsistently between dotnet restore
+        # and dotnet tool commands; writing the token value explicitly avoids this entirely.
+        printf '%s\n' \
+          '<?xml version="1.0" encoding="utf-8"?>' \
+          '<configuration>' \
+          '  <packageSources>' \
+          '    <clear />' \
+          "    <add key=\"github\" value=\"https://nuget.pkg.github.com/${GITHUB_ORG}/index.json\" />" \
+          '  </packageSources>' \
+          '  <packageSourceCredentials>' \
+          '    <github>' \
+          '      <add key="Username" value="x-access-token" />' \
+          "      <add key=\"ClearTextPassword\" value=\"${NUGET_APP_TOKEN}\" />" \
+          '    </github>' \
+          '  </packageSourceCredentials>' \
+          '</configuration>' \
+          > "$TEMP_CONFIG"
 
+        dotnet tool update Xplor.AI.Metrics.BuildTool --tool-path "$TOOL_PATH" --configfile "$TEMP_CONFIG" || \
+        dotnet tool install Xplor.AI.Metrics.BuildTool --tool-path "$TOOL_PATH" --configfile "$TEMP_CONFIG"
+
+        rm -f "$TEMP_CONFIG"
         echo "$TOOL_PATH" >> $GITHUB_PATH
 
     - name: Build Repository
