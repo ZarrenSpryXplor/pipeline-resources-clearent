@@ -64,9 +64,10 @@ jobs:
       pull-requests: write
 
     steps:
-    - uses: actions/checkout@v6
+    - name: Checkout Repository
+      uses: actions/checkout@v6
 
-    - name: Setup .NET
+    - name: Setup .NET Environment
       uses: actions/setup-dotnet@v5
       with:
         dotnet-version: ${{ inputs.dotnet_version }}
@@ -84,7 +85,7 @@ jobs:
             find . -name "*.csproj" -exec dotnet restore {} +
           fi
 
-    - name: Dependency Review
+    - name: Review Dependencies for Vulnerabilities
       if: github.event_name == 'pull_request'
       uses: actions/dependency-review-action@v5
       with:
@@ -106,7 +107,7 @@ jobs:
         --results-directory ./TestResults \
         -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SkipAutoProps=true DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude=[*Tests*]* DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeAssembliesWithoutSources=MissingAll DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SingleHit=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.IncludeTestAssembly=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.UseSourceLink=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.DeterministicReport=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByAttribute=Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute
 
-    - name: Resolve Coverage Threshold
+    - name: Resolve Code Coverage Threshold
       id: coverage-threshold
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -133,7 +134,7 @@ jobs:
         echo "baseline_value=$BASELINE" >> $GITHUB_OUTPUT
         echo "effective_threshold=$EFFECTIVE_THRESHOLD_INT" >> $GITHUB_OUTPUT
 
-    - name: ReportGenerator
+    - name: Generate Code Coverage Report
       uses: danielpalme/ReportGenerator-GitHub-Action@5.5.7
       with:
         reports: '**/TestResults/**/coverage.cobertura.xml'
@@ -141,10 +142,10 @@ jobs:
         reporttypes: 'HtmlInline;MarkdownSummary'
         customSettings: 'minimumCoverageThresholds:lineCoverage=${{ steps.coverage-threshold.outputs.effective_threshold }}'
 
-    - name: Publish Coverage Summary
+    - name: Publish Code Coverage Summary to GitHub Action Summary
       run: cat coveragereport/Summary.md >> $GITHUB_STEP_SUMMARY
 
-    - name: Upload HTML Report Artifact
+    - name: Upload HTML Code Coverage Report Artifact
       uses: actions/upload-artifact@v7
       with:
         name: code-coverage-report-${{ inputs.dotnet_version }}
@@ -152,7 +153,7 @@ jobs:
         retention-days: ${{ inputs.artifact_retention_days }}
 
     # Coverage regression is evaluated only for pull requests.
-    - name: Calculate & Compare Coverage
+    - name: Compare Code Coverage Percentage to Threshold
       id: coverage-logic
       if: github.event_name == 'pull_request'
       run: |
@@ -173,7 +174,7 @@ jobs:
           echo "status=pass" >> $GITHUB_OUTPUT
         fi
 
-    - name: Prepare Baseline Coverage File
+    - name: Prepare or Update Baseline Code Coverage File
       if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
       run: |
         # Build baseline from Cobertura XML on default-branch non-PR runs.
@@ -183,7 +184,7 @@ jobs:
         echo "$BASELINE_PCT" > coverage.txt
 
     # PR comment formatting and posting are skipped for non-PR runs.
-    - name: Read Summary for Comment
+    - name: Read Code Coverage Summary for Pull Request Comment
       id: read-summary
       if: github.event_name == 'pull_request'
       run: |
@@ -193,7 +194,7 @@ jobs:
         cat coveragereport/Summary.md >> $GITHUB_OUTPUT
         echo "$EOF" >> $GITHUB_OUTPUT
 
-    - name: Post PR Comment
+    - name: Post Pull Request Comment of the Code Coverage Summary
       uses: mshick/add-pr-comment@v3
       if: github.event_name == 'pull_request'
       with:
@@ -213,12 +214,12 @@ jobs:
       run: dotnet format --verbosity detailed --verify-no-changes
 
     # Fail PR runs when regression check reports lower coverage than baseline.
-    - name: Final Gate
+    - name: Final Gate - Fail Pull Request Checks if Code Coverage Does Not Meet Threshold
       if: github.event_name == 'pull_request' && steps.coverage-logic.outputs.status == 'fail'
       run: exit 1
 
     # This step ensures that if we are on the default branch, we update the baseline for future PRs
-    - name: Update Baseline Artifact
+    - name: Update Baseline Code Coverage Artifact
       if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
       uses: actions/upload-artifact@v7
       with:
@@ -226,7 +227,7 @@ jobs:
         path: coverage.txt
         retention-days: ${{ inputs.artifact_retention_days }}
 
-    - name: Pack NuGet Package
+    - name: Pack NuGet Package(s)
       if: ${{ inputs.nuget_package == true && inputs.upload_artifact == true }}
       run: |
           # Count .sln files in the root directory
@@ -240,7 +241,7 @@ jobs:
             find . \( -path "./test" -o -path "./test/*" -o -path "./sample" -o -path "./sample/*" \) -prune -o -name "*.csproj" ! -name "*Tests*.csproj" ! -name "*Sample*.csproj" -exec dotnet pack --configuration Release --no-build --output ./dist {} +
           fi
 
-    - name: Upload NuGet Artifact
+    - name: Upload NuGet Package(s) to Actions Artifact Storage for Publish to GitHub Packages
       if: ${{ inputs.nuget_package == true && inputs.upload_artifact == true }}
       uses: actions/upload-artifact@v7
       with:
@@ -259,20 +260,21 @@ jobs:
       packages: write
 
     steps:
-    - uses: actions/checkout@v6
+    - name: Checkout Repository
+      uses: actions/checkout@v6
 
-    - name: Setup .NET
+    - name: Setup .NET Environment
       uses: actions/setup-dotnet@v5
       with:
         dotnet-version: ${{ inputs.dotnet_version }}
 
-    - name: Download NuGet Artifact
+    - name: Download NuGet Package(s) from Actions Artifact Storage for Publish to GitHub Packages
       uses: actions/download-artifact@v7
       with:
         name: nuget-dist
         path: ./dist
 
-    - name: Publish to GitHub Packages
+    - name: Publish NuGet Package(s)to GitHub Packages
       env:
           GITHUB_USERNAME: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
