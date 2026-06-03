@@ -72,7 +72,7 @@ jobs:
       with:
         dotnet-version: ${{ inputs.dotnet_version }}
 
-    - name: Restore Dependencies
+    - name: Restore Repository Dependencies
       run: |
           # Count .sln files in the root directory
           SLN_COUNT=$(find . -maxdepth 1 -name "*.sln" | wc -l)
@@ -85,13 +85,29 @@ jobs:
             find . -name "*.csproj" -exec dotnet restore {} +
           fi
 
-    - name: Review Dependencies for Vulnerabilities
+    - name: Review Repository Dependencies for Vulnerabilities
       if: github.event_name == 'pull_request'
       uses: actions/dependency-review-action@v5
       with:
         comment-summary-in-pr: always
         base-ref: ${{ inputs.base_ref }}
         head-ref: ${{ inputs.head_ref }}
+
+    - name: Install Xplor.AI.Metrics.BuildTool
+      env:
+        GITHUB_USERNAME: ${{ github.actor }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_ORG: ${{ github.repository_owner }}
+      run: |
+        set -euo pipefail
+
+        TOOL_PATH="${{ runner.temp }}/tools"
+
+        dotnet tool update Xplor.AI.Metrics.BuildTool --tool-path "$TOOL_PATH" --configfile ./nuget.config ||
+        
+        dotnet tool install Xplor.AI.Metrics.BuildTool --tool-path "$TOOL_PATH" --configfile ./nuget.config
+        
+        echo "$TOOL_PATH" >> $GITHUB_PATH
 
     - name: Build Repository
       run: dotnet build --configuration Release --no-restore
