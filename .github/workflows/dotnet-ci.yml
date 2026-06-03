@@ -16,7 +16,7 @@ on:
         description: 'Baseline coverage percentage threshold for pull requests to use when no baseline is defined in the coverage.txt in the main branch.'
         required: false
         type: string
-        default: '0.0'
+        default: '0'
 
       minimum_coverage_threshold:
         description: 'Minimum overall line coverage threshold, enforced by ReportGenerator.'
