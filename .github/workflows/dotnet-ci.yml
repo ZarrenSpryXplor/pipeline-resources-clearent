@@ -194,7 +194,7 @@ jobs:
         cat coveragereport/Summary.md >> $GITHUB_OUTPUT
         echo "$EOF" >> $GITHUB_OUTPUT
 
-    - name: Post Pull Request Comment of the Code Coverage Summary
+    - name: Add Comment to Pull Request with the Code Coverage Summary
       uses: mshick/add-pr-comment@v3
       if: github.event_name == 'pull_request'
       with:
@@ -214,7 +214,7 @@ jobs:
       run: dotnet format --verbosity detailed --verify-no-changes
 
     # Fail PR runs when regression check reports lower coverage than baseline.
-    - name: Final Gate - Fail Pull Request Checks if Code Coverage Does Not Meet Threshold
+    - name: Fail Pull Request Verifications if Code Coverage Does Not Meet Threshold
       if: github.event_name == 'pull_request' && steps.coverage-logic.outputs.status == 'fail'
       run: exit 1
 
