@@ -127,9 +127,11 @@ jobs:
         fi
 
         EFFECTIVE_THRESHOLD=$(awk "BEGIN { b=$BASELINE; m=$MINIMUM; if (b > m) printf \"%.2f\", b; else printf \"%.2f\", m }")
+        # ReportGenerator expects an integer for lineCoverage.
+        EFFECTIVE_THRESHOLD_INT=$(awk "BEGIN { t=$EFFECTIVE_THRESHOLD; if (t == int(t)) printf \"%d\", t; else printf \"%d\", int(t)+1 }")
 
         echo "baseline_value=$BASELINE" >> $GITHUB_OUTPUT
-        echo "effective_threshold=$EFFECTIVE_THRESHOLD" >> $GITHUB_OUTPUT
+        echo "effective_threshold=$EFFECTIVE_THRESHOLD_INT" >> $GITHUB_OUTPUT
 
     - name: ReportGenerator
       uses: danielpalme/ReportGenerator-GitHub-Action@5.5.7
