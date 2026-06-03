@@ -105,23 +105,34 @@ jobs:
           exit 1
         fi
 
-        # GitHub Packages NuGet does not use a v3-flatcontainer path; use the NuGet search/query endpoint instead
-        TOOL_SEARCH_URL="https://nuget.pkg.github.com/$GITHUB_ORG/query?q=Xplor.AI.Metrics.BuildTool&prerelease=false&take=1"
-        TOOL_STATUS=$(curl -sS -o /tmp/tool_search.json -w "%{http_code}" -u "$GITHUB_USERNAME:$GITHUB_TOKEN" "$TOOL_SEARCH_URL")
-
-        if [ "$TOOL_STATUS" = "403" ]; then
-          echo "::error::Token can reach the feed index but is forbidden from querying package metadata. Verify the GitHub App has packages:read and contents:read and is installed on the repository that owns Xplor.AI.Metrics.BuildTool."
+        INDEX_JSON="$(mktemp)"
+        if ! curl -fsS -u "$GITHUB_USERNAME:$GITHUB_TOKEN" "$FEED_URL" -o "$INDEX_JSON"; then
+          echo "::error::Failed to download authenticated NuGet service index from $FEED_URL."
           exit 1
         fi
 
-        if [ "$TOOL_STATUS" = "200" ]; then
-          TOTAL_HITS=$(python3 -c "import json; d=json.load(open('/tmp/tool_search.json')); print(d.get('totalHits',0))" 2>/dev/null || echo "unknown")
-          echo "Tool package search succeeded (HTTP 200, totalHits: $TOTAL_HITS)."
-          if [ "$TOTAL_HITS" = "0" ]; then
-            echo "::warning::Search returned 0 results for Xplor.AI.Metrics.BuildTool. Verify the package ID and that it is published to the xplor-pay GitHub Packages feed."
-          fi
+        REG_BASE=$(python3 -c "import json; d=json.load(open('$INDEX_JSON')); r=d.get('resources',[]); ids=[x.get('@id','') for x in r if 'RegistrationsBaseUrl' in x.get('@type','')]; print(ids[0] if ids else '')")
+
+        if [ -z "$REG_BASE" ]; then
+          echo "::warning::Could not find RegistrationsBaseUrl in service index. Skipping package-level preflight."
+          echo "GitHub Packages auth preflight succeeded (HTTP $STATUS)."
+          exit 0
+        fi
+
+        TOOL_PACKAGE_LOWER="xplor.ai.metrics.buildtool"
+        TOOL_REG_URL="${REG_BASE%/}/$TOOL_PACKAGE_LOWER/index.json"
+
+        TOOL_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' -u "$GITHUB_USERNAME:$GITHUB_TOKEN" "$TOOL_REG_URL" || echo 'curl_failed')"
+
+        if [ "$TOOL_STATUS" = "curl_failed" ]; then
+          echo "::warning::Registration probe failed while calling $TOOL_REG_URL. Continuing because feed auth already succeeded."
+        elif [ "$TOOL_STATUS" = "403" ]; then
+          echo "::error::Token can reach the feed index but is forbidden from package registration metadata ($TOOL_REG_URL). Verify app installation scope and package access."
+          exit 1
+        elif [ "$TOOL_STATUS" = "404" ]; then
+          echo "::warning::Package registration metadata not found at $TOOL_REG_URL. Verify package ID and that it is published in this org feed."
         else
-          echo "::warning::Tool package search returned HTTP $TOOL_STATUS. Package visibility to this token could not be confirmed."
+          echo "Tool package registration probe returned HTTP $TOOL_STATUS."
         fi
 
         echo "GitHub Packages auth preflight succeeded (HTTP $STATUS)."
