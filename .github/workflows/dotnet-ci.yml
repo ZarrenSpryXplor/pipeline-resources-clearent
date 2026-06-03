@@ -105,7 +105,7 @@ jobs:
           exit 1
         fi
 
-        TOOL_PACKAGE="xplor.ai.metrics.buildtool"
+        TOOL_PACKAGE="Xplor.AI.Metrics.BuildTool"
         TOOL_INDEX_URL="https://nuget.pkg.github.com/$GITHUB_ORG/v3-flatcontainer/$TOOL_PACKAGE/index.json"
         TOOL_STATUS=$(curl -sS -o /dev/null -w "%{http_code}" -u "$GITHUB_USERNAME:$GITHUB_TOKEN" "$TOOL_INDEX_URL")
 
@@ -150,41 +150,10 @@ jobs:
         set -euo pipefail
 
         TOOL_PATH="${{ runner.temp }}/tools"
-        TEMP_CONFIG="${{ runner.temp }}/nuget.tool.config"
 
-        if [ -f ./nuget.config ]; then
-          cp ./nuget.config "$TEMP_CONFIG"
-        else
-          printf '%s\n' \
-            '<?xml version="1.0" encoding="utf-8"?>' \
-            '<configuration>' \
-            '  <packageSources>' \
-            '    <clear />' \
-            '    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />' \
-            '  </packageSources>' \
-            '</configuration>' > "$TEMP_CONFIG"
-        fi
+        dotnet tool update Xplor.AI.Metrics.BuildTool --tool-path "$TOOL_PATH" --configfile ./nuget.config || \
+        dotnet tool install Xplor.AI.Metrics.BuildTool --tool-path "$TOOL_PATH" --configfile ./nuget.config
 
-        if dotnet nuget list source --configfile "$TEMP_CONFIG" | grep -qi "github"; then
-          dotnet nuget update source github \
-            --source "https://nuget.pkg.github.com/$GITHUB_ORG/index.json" \
-            --username "$GITHUB_USERNAME" \
-            --password "$GITHUB_TOKEN" \
-            --store-password-in-clear-text \
-            --configfile "$TEMP_CONFIG"
-        else
-          dotnet nuget add source "https://nuget.pkg.github.com/$GITHUB_ORG/index.json" \
-            --name github \
-            --username "$GITHUB_USERNAME" \
-            --password "$GITHUB_TOKEN" \
-            --store-password-in-clear-text \
-            --configfile "$TEMP_CONFIG"
-        fi
-
-        dotnet tool update Xplor.AI.Metrics.BuildTool --tool-path "$TOOL_PATH" --configfile "$TEMP_CONFIG" ||
-        
-        dotnet tool install Xplor.AI.Metrics.BuildTool --tool-path "$TOOL_PATH" --configfile "$TEMP_CONFIG"
-        
         echo "$TOOL_PATH" >> $GITHUB_PATH
 
     - name: Build Repository
