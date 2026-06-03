@@ -92,12 +92,18 @@ jobs:
 
     - name: Verify Authentication to GitHub Packages
       env:
-        GITHUB_USERNAME: x-access-token
-        GITHUB_TOKEN: ${{ steps.package-reader-token.outputs.token }}
+        GITHUB_USERNAME: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_USERNAME || 'x-access-token' }}
+        GITHUB_TOKEN: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_PAT || steps.package-reader-token.outputs.token }}
         GITHUB_ORG: ${{ github.repository_owner }}
         TOOL_REPOSITORY: ${{ inputs.tool_package_repository }}
       run: |
         set -euo pipefail
+
+        if [ -n "${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT }}" ]; then
+          echo "Using PAT-based package read authentication."
+        else
+          echo "Using GitHub App installation token for package read authentication."
+        fi
 
         if [ ! -f ./nuget.config ]; then
           echo "::error::nuget.config was not found at repository root."
@@ -185,7 +191,8 @@ jobs:
 
     - name: Install Xplor.AI.Metrics.BuildTool
       env:
-        NUGET_APP_TOKEN: ${{ steps.package-reader-token.outputs.token }}
+        NUGET_AUTH_USERNAME: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_USERNAME || 'x-access-token' }}
+        NUGET_AUTH_TOKEN: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_PAT || steps.package-reader-token.outputs.token }}
         GITHUB_ORG: ${{ github.repository_owner }}
       run: |
         set -euo pipefail
@@ -205,8 +212,8 @@ jobs:
           '  </packageSources>' \
           '  <packageSourceCredentials>' \
           '    <github>' \
-          '      <add key="Username" value="x-access-token" />' \
-          "      <add key=\"ClearTextPassword\" value=\"${NUGET_APP_TOKEN}\" />" \
+          "      <add key=\"Username\" value=\"${NUGET_AUTH_USERNAME}\" />" \
+          "      <add key=\"ClearTextPassword\" value=\"${NUGET_AUTH_TOKEN}\" />" \
           '    </github>' \
           '  </packageSourceCredentials>' \
           '</configuration>' \
