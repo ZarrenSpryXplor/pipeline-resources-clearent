@@ -223,40 +223,59 @@ jobs:
         mkdir -p "$NUGET_PACKAGES"
         dotnet nuget locals all --clear >/dev/null 2>&1 || true
 
-        # Write credentials directly into the config file so NuGet never performs env var
-        # substitution. NuGet's %VAR% expansion behaves inconsistently between dotnet restore
-        # and dotnet tool commands; writing the token value explicitly avoids this entirely.
-        printf '%s\n' \
-          '<?xml version="1.0" encoding="utf-8"?>' \
-          '<configuration>' \
-          '  <packageSources>' \
-          '    <clear />' \
-          "    <add key=\"github\" value=\"https://nuget.pkg.github.com/xplor-pay/index.json\" />" \
-          '  </packageSources>' \
-          '  <packageSourceCredentials>' \
-          '    <github>' \
-          "      <add key=\"Username\" value=\"${NUGET_AUTH_USERNAME}\" />" \
-          "      <add key=\"ClearTextPassword\" value=\"${NUGET_AUTH_TOKEN}\" />" \
-          '    </github>' \
-          '  </packageSourceCredentials>' \
-          '</configuration>' \
-          > "$TEMP_CONFIG"
+        # Use caller nuget.config (same behavior as local success path) and resolve placeholders
+        # into concrete values for CI execution.
+        if [ -f ./nuget.config ]; then
+          cp ./nuget.config "$TEMP_CONFIG"
+        else
+          printf '%s\n' \
+            '<?xml version="1.0" encoding="utf-8"?>' \
+            '<configuration>' \
+            '  <packageSources>' \
+            '    <clear />' \
+            '    <add key="github" value="https://nuget.pkg.github.com/%GITHUB_ORG%/index.json" />' \
+            '    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />' \
+            '  </packageSources>' \
+            '  <packageSourceCredentials>' \
+            '    <github>' \
+            '      <add key="Username" value="%GITHUB_USERNAME%" />' \
+            '      <add key="ClearTextPassword" value="%GITHUB_TOKEN%" />' \
+            '    </github>' \
+            '  </packageSourceCredentials>' \
+            '</configuration>' \
+            > "$TEMP_CONFIG"
+        fi
+
+        python3 -c "from pathlib import Path; import os; p=Path('$TEMP_CONFIG'); s=p.read_text(encoding='utf-8'); s=s.replace('%GITHUB_ORG%', os.environ['GITHUB_ORG']).replace('%GITHUB_USERNAME%', os.environ['NUGET_AUTH_USERNAME']).replace('%GITHUB_TOKEN%', os.environ['NUGET_AUTH_TOKEN']); p.write_text(s, encoding='utf-8')"
 
         echo "Installing Xplor.AI.Metrics.BuildTool version: $TOOL_PACKAGE_VERSION"
         echo "NuGet packages cache: $NUGET_PACKAGES"
 
         PACKAGE_ID_LOWER="xplor.ai.metrics.buildtool"
-        NUPKG_URL="https://nuget.pkg.github.com/xplor-pay/download/$PACKAGE_ID_LOWER/$TOOL_PACKAGE_VERSION/$PACKAGE_ID_LOWER.$TOOL_PACKAGE_VERSION.nupkg"
+        NUPKG_URL="https://nuget.pkg.github.com/$GITHUB_ORG/download/$PACKAGE_ID_LOWER/$TOOL_PACKAGE_VERSION/$PACKAGE_ID_LOWER.$TOOL_PACKAGE_VERSION.nupkg"
         NUPKG_PATH="${{ runner.temp }}/$PACKAGE_ID_LOWER.$TOOL_PACKAGE_VERSION.nupkg"
+        LOCAL_SOURCE_DIR="${{ runner.temp }}/tool-package-source"
 
-        if curl -fsS -u "$NUGET_AUTH_USERNAME:$NUGET_AUTH_TOKEN" -o "$NUPKG_PATH" "$NUPKG_URL"; then
+        rm -rf "$LOCAL_SOURCE_DIR"
+        mkdir -p "$LOCAL_SOURCE_DIR"
+
+        if curl -fLsS -u "$NUGET_AUTH_USERNAME:$NUGET_AUTH_TOKEN" -o "$NUPKG_PATH" "$NUPKG_URL"; then
           echo "Downloaded package for inspection: $NUPKG_PATH"
+
+          if file "$NUPKG_PATH" | grep -qi "Zip archive"; then
+            echo "Downloaded file is a valid ZIP container."
+          else
+            echo "::warning::Downloaded file is not a ZIP archive. First 200 bytes follow for diagnostics:"
+            head -c 200 "$NUPKG_PATH" | tr -d '\000' || true
+          fi
 
           echo "Listing package entries related to tool settings and nuspec:"
           unzip -l "$NUPKG_PATH" | grep -Ei "dotnettoolsettings|\.nuspec" || true
 
           if unzip -l "$NUPKG_PATH" | grep -q "DotnetToolSettings.xml"; then
             echo "Found exact DotnetToolSettings.xml entry in package archive."
+            cp "$NUPKG_PATH" "$LOCAL_SOURCE_DIR/"
+            echo "Prepared local package source: $LOCAL_SOURCE_DIR"
           else
             echo "::warning::Exact DotnetToolSettings.xml entry not found in package archive."
             echo "::warning::If a differently cased file exists (for example, dotnettoolsettings.xml), Windows may succeed while ubuntu-latest fails due to case sensitivity."
@@ -266,7 +285,11 @@ jobs:
         fi
 
         set +e
-        INSTALL_OUTPUT=$(dotnet tool install Xplor.AI.Metrics.BuildTool --version "$TOOL_PACKAGE_VERSION" --tool-path "$TOOL_PATH" --configfile "$TEMP_CONFIG" 2>&1)
+        if [ -f "$LOCAL_SOURCE_DIR/$PACKAGE_ID_LOWER.$TOOL_PACKAGE_VERSION.nupkg" ]; then
+          INSTALL_OUTPUT=$(dotnet tool install Xplor.AI.Metrics.BuildTool --version "$TOOL_PACKAGE_VERSION" --tool-path "$TOOL_PATH" --add-source "$LOCAL_SOURCE_DIR" --ignore-failed-sources --verbosity detailed 2>&1)
+        else
+          INSTALL_OUTPUT=$(dotnet tool install Xplor.AI.Metrics.BuildTool --version "$TOOL_PACKAGE_VERSION" --tool-path "$TOOL_PATH" --configfile "$TEMP_CONFIG" --verbosity detailed 2>&1)
+        fi
         INSTALL_EXIT_CODE=$?
         set -e
 
