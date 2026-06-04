@@ -276,7 +276,7 @@ jobs:
           # Some packages published from Windows can contain backslash-separated ZIP entry names
           # (e.g., tools\net8.0\any\DotnetToolSettings.xml). Linux dotnet tool install expects
           # forward slashes in ZIP paths, so normalize entries for ubuntu-latest compatibility.
-          python3 -c "import os,zipfile; src=os.environ['NUPKG_PATH']; dst=os.environ['NORMALIZED_NUPKG_PATH']; zin=zipfile.ZipFile(src,'r'); zout=zipfile.ZipFile(dst,'w',compression=zipfile.ZIP_DEFLATED); [zout.writestr(info.filename.replace('\\\\','/'), zin.read(info.filename)) for info in zin.infolist()]; zin.close(); zout.close()"
+          python3 -c "import zipfile; src='$NUPKG_PATH'; dst='$NORMALIZED_NUPKG_PATH'; zin=zipfile.ZipFile(src,'r'); zout=zipfile.ZipFile(dst,'w',compression=zipfile.ZIP_DEFLATED); [zout.writestr(info.filename.replace('\\\\','/'), zin.read(info.filename)) for info in zin.infolist()]; zin.close(); zout.close()"
 
           if [ -f "$NORMALIZED_NUPKG_PATH" ]; then
             echo "Listing normalized package entries related to tool settings and nuspec:"
