@@ -102,12 +102,12 @@ jobs:
 
     - name: Verify Authentication to GitHub Packages
       env:
-        #GITHUB_USERNAME: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_USERNAME || 'x-access-token' }}
-        #GITHUB_TOKEN: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_PAT || steps.package-reader-token.outputs.token }}
-        #USE_PAT_AUTH: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && 'true' || 'false' }}
-        GITHUB_USERNAME: 'x-access-token'
-        GITHUB_TOKEN: ${{ steps.package-reader-token.outputs.token }}
-        USE_PAT_AUTH: 'false'
+        GITHUB_USERNAME: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_USERNAME || 'x-access-token' }}
+        GITHUB_TOKEN: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_PAT || steps.package-reader-token.outputs.token }}
+        USE_PAT_AUTH: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && 'true' || 'false' }}
+        #GITHUB_USERNAME: 'x-access-token'
+        #GITHUB_TOKEN: ${{ steps.package-reader-token.outputs.token }}
+        #USE_PAT_AUTH: 'false'
 
         GITHUB_ORG: ${{ github.repository_owner }}
         TOOL_REPOSITORY: ${{ inputs.tool_package_repository }}
@@ -158,16 +158,20 @@ jobs:
         echo "GitHub Packages auth preflight succeeded (HTTP $STATUS)."
 
     - name: Restore Repository Dependencies
+      env:
+        # Keep these aliases aligned with caller nuget.config placeholders (%GITHUB_USERNAME%/%GITHUB_TOKEN%).
+        GITHUB_USERNAME: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_USERNAME || 'x-access-token' }}
+        GITHUB_TOKEN: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_PAT || steps.package-reader-token.outputs.token }}
       run: |
           # Count .sln files in the root directory
           SLN_COUNT=$(find . -maxdepth 1 -name "*.sln" | wc -l)
 
           if [ "$SLN_COUNT" -gt 0 ]; then
             echo "✅ Found Solution file(s) in root. Restoring via .sln..."
-            dotnet restore
+            dotnet restore --configfile ./nuget.config
           else
             echo "⚠️ No .sln found in root. Restoring all .csproj files recursively..."
-            find . -name "*.csproj" -exec dotnet restore {} +
+            find . -name "*.csproj" -exec dotnet restore --configfile ./nuget.config {} +
           fi
 
     - name: Review Repository Dependencies for Vulnerabilities
