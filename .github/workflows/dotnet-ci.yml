@@ -226,6 +226,7 @@ jobs:
 
         python3 -c "from pathlib import Path; import os; p=Path('$TEMP_CONFIG'); s=p.read_text(encoding='utf-8'); s=s.replace('%GITHUB_ORG%', os.environ['GITHUB_ORG']).replace('%GITHUB_USERNAME%', os.environ['NUGET_AUTH_USERNAME']).replace('%GITHUB_TOKEN%', os.environ['NUGET_AUTH_TOKEN']); p.write_text(s, encoding='utf-8')"
 
+
         echo "Installing Xplor.AI.Metrics.BuildTool version: $TOOL_PACKAGE_VERSION"
 
         PACKAGE_ID_LOWER="xplor.ai.metrics.buildtool"
@@ -237,6 +238,20 @@ jobs:
         rm -rf "$LOCAL_SOURCE_DIR"
         mkdir -p "$LOCAL_SOURCE_DIR"
 
+        # Attempt 1: let dotnet resolve and download via NuGet protocol (uses registration/flatcontainer
+        # endpoints rather than the raw /download URL, so auth behaves differently).
+        echo "Attempting dotnet tool install via NuGet protocol..."
+        if dotnet tool install Xplor.AI.Metrics.BuildTool \
+            --version "$TOOL_PACKAGE_VERSION" \
+            --tool-path "$TOOL_PATH" \
+            --configfile "$TEMP_CONFIG"; then
+          echo "Tool installed successfully via NuGet protocol"
+          rm -f "$TEMP_CONFIG"
+          echo "$TOOL_PATH" >> "$GITHUB_PATH"
+          exit 0
+        fi
+
+        echo "dotnet tool install via NuGet protocol failed; falling back to manual nupkg download"
         echo "nupkg_path: $NUPKG_PATH"
         echo "nupkg_url: $NUPKG_URL"
 
