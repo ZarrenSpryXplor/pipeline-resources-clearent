@@ -102,9 +102,13 @@ jobs:
 
     - name: Verify Authentication to GitHub Packages
       env:
-        GITHUB_USERNAME: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_USERNAME || 'x-access-token' }}
-        GITHUB_TOKEN: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_PAT || steps.package-reader-token.outputs.token }}
-        USE_PAT_AUTH: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && 'true' || 'false' }}
+        #GITHUB_USERNAME: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_USERNAME || 'x-access-token' }}
+        #GITHUB_TOKEN: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_PAT || steps.package-reader-token.outputs.token }}
+        #USE_PAT_AUTH: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && 'true' || 'false' }}
+        GITHUB_USERNAME: 'x-access-token'
+        GITHUB_TOKEN: ${{ steps.package-reader-token.outputs.token }}
+        USE_PAT_AUTH: 'false'
+
         GITHUB_ORG: ${{ github.repository_owner }}
         TOOL_REPOSITORY: ${{ inputs.tool_package_repository }}
       run: |
@@ -176,8 +180,10 @@ jobs:
 
     - name: Install Xplor.AI.Metrics.BuildTool
       env:
-        NUGET_AUTH_USERNAME: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_USERNAME || 'x-access-token' }}
-        NUGET_AUTH_TOKEN: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_PAT || steps.package-reader-token.outputs.token }}
+        #NUGET_AUTH_USERNAME: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_USERNAME || 'x-access-token' }}
+        #NUGET_AUTH_TOKEN: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_PAT || steps.package-reader-token.outputs.token }}
+        NUGET_AUTH_USERNAME: 'x-access-token'
+        NUGET_AUTH_TOKEN: ${{ steps.package-reader-token.outputs.token }}
         GITHUB_ORG: ${{ github.repository_owner }}
         TOOL_PACKAGE_VERSION: ${{ inputs.tool_package_version }}
         NUGET_PACKAGES: ${{ runner.temp }}/nuget-packages
