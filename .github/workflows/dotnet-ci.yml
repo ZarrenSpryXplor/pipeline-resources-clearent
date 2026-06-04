@@ -254,6 +254,7 @@ jobs:
         PACKAGE_ID_LOWER="xplor.ai.metrics.buildtool"
         NUPKG_URL="https://nuget.pkg.github.com/$GITHUB_ORG/download/$PACKAGE_ID_LOWER/$TOOL_PACKAGE_VERSION/$PACKAGE_ID_LOWER.$TOOL_PACKAGE_VERSION.nupkg"
         NUPKG_PATH="${{ runner.temp }}/$PACKAGE_ID_LOWER.$TOOL_PACKAGE_VERSION.nupkg"
+        NORMALIZED_NUPKG_PATH="${{ runner.temp }}/$PACKAGE_ID_LOWER.$TOOL_PACKAGE_VERSION.normalized.nupkg"
         LOCAL_SOURCE_DIR="${{ runner.temp }}/tool-package-source"
 
         rm -rf "$LOCAL_SOURCE_DIR"
@@ -272,9 +273,19 @@ jobs:
           echo "Listing package entries related to tool settings and nuspec:"
           unzip -l "$NUPKG_PATH" | grep -Ei "dotnettoolsettings|\.nuspec" || true
 
-          if unzip -l "$NUPKG_PATH" | grep -q "DotnetToolSettings.xml"; then
+          # Some packages published from Windows can contain backslash-separated ZIP entry names
+          # (e.g., tools\net8.0\any\DotnetToolSettings.xml). Linux dotnet tool install expects
+          # forward slashes in ZIP paths, so normalize entries for ubuntu-latest compatibility.
+          python3 -c "import os,zipfile; src=os.environ['NUPKG_PATH']; dst=os.environ['NORMALIZED_NUPKG_PATH']; zin=zipfile.ZipFile(src,'r'); zout=zipfile.ZipFile(dst,'w',compression=zipfile.ZIP_DEFLATED); [zout.writestr(info.filename.replace('\\\\','/'), zin.read(info.filename)) for info in zin.infolist()]; zin.close(); zout.close()"
+
+          if [ -f "$NORMALIZED_NUPKG_PATH" ]; then
+            echo "Listing normalized package entries related to tool settings and nuspec:"
+            unzip -l "$NORMALIZED_NUPKG_PATH" | grep -Ei "dotnettoolsettings|\.nuspec" || true
+          fi
+
+          if unzip -l "$NORMALIZED_NUPKG_PATH" | grep -q "tools/net8.0/any/DotnetToolSettings.xml"; then
             echo "Found exact DotnetToolSettings.xml entry in package archive."
-            cp "$NUPKG_PATH" "$LOCAL_SOURCE_DIR/"
+            cp "$NORMALIZED_NUPKG_PATH" "$LOCAL_SOURCE_DIR/$PACKAGE_ID_LOWER.$TOOL_PACKAGE_VERSION.nupkg"
             echo "Prepared local package source: $LOCAL_SOURCE_DIR"
           else
             echo "::warning::Exact DotnetToolSettings.xml entry not found in package archive."
