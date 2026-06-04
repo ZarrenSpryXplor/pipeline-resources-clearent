@@ -202,8 +202,10 @@ jobs:
         # Use caller nuget.config (same behavior as local success path) and resolve placeholders
         # into concrete values for CI execution.
         if [ -f ./nuget.config ]; then
+          echo "copying nuget.config from repository"
           cp ./nuget.config "$TEMP_CONFIG"
         else
+          echo "creating temporary nuget.config"
           printf '%s\n' \
             '<?xml version="1.0" encoding="utf-8"?>' \
             '<configuration>' \
@@ -234,6 +236,9 @@ jobs:
 
         rm -rf "$LOCAL_SOURCE_DIR"
         mkdir -p "$LOCAL_SOURCE_DIR"
+
+        echo "nupkg_path: $NUPKG_PATH"
+        echo "nupkg_url: $NUPKG_URL"
 
         #if ! curl -fLsS -u "$NUGET_AUTH_USERNAME:$NUGET_AUTH_TOKEN" -o "$NUPKG_PATH" "$NUPKG_URL"; then
         if ! curl -fLsS -H "Authorization: Bearer $NUGET_AUTH_TOKEN" -o "$NUPKG_PATH" "$NUPKG_URL"; then
