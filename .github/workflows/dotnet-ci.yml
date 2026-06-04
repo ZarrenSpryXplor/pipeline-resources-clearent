@@ -151,36 +151,6 @@ jobs:
           fi
         fi
 
-        INDEX_JSON="$(mktemp)"
-        if ! curl -fsS -u "$GITHUB_USERNAME:$GITHUB_TOKEN" "$FEED_URL" -o "$INDEX_JSON"; then
-          echo "::error::Failed to download authenticated NuGet service index from $FEED_URL."
-          exit 1
-        fi
-
-        REG_BASE=$(python3 -c "import json; d=json.load(open('$INDEX_JSON')); ids=[]; [ids.append(x.get('@id','')) for x in d.get('resources',[]) if any(str(v).startswith('RegistrationsBaseUrl') for v in (x.get('@type',[]) if isinstance(x.get('@type',[]),list) else [x.get('@type','')])) and ('registr' in x.get('@id','').lower() or 'registration' in x.get('@id','').lower())]; print(ids[0] if ids else '')")
-
-        if [ -z "$REG_BASE" ]; then
-          echo "::warning::Could not find RegistrationsBaseUrl in service index. Skipping package-level preflight."
-          echo "GitHub Packages auth preflight succeeded (HTTP $STATUS)."
-          exit 0
-        fi
-
-        TOOL_PACKAGE_LOWER="xplor.ai.metrics.buildtool"
-        TOOL_REG_URL="${REG_BASE%/}/$TOOL_PACKAGE_LOWER/index.json"
-
-        TOOL_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' -u "$GITHUB_USERNAME:$GITHUB_TOKEN" "$TOOL_REG_URL" || echo 'curl_failed')"
-
-        if [ "$TOOL_STATUS" = "curl_failed" ]; then
-          echo "::warning::Registration probe failed while calling $TOOL_REG_URL. Continuing because feed auth already succeeded."
-        elif [ "$TOOL_STATUS" = "403" ]; then
-          echo "::error::Token can reach the feed index but is forbidden from package registration metadata ($TOOL_REG_URL). Verify app installation scope and package access."
-          exit 1
-        elif [ "$TOOL_STATUS" = "404" ]; then
-          echo "::warning::Package registration metadata not found at $TOOL_REG_URL. Verify package ID and that it is published in this org feed."
-        else
-          echo "Tool package registration probe returned HTTP $TOOL_STATUS."
-        fi
-
         echo "GitHub Packages auth preflight succeeded (HTTP $STATUS)."
 
     - name: Restore Repository Dependencies
@@ -249,7 +219,6 @@ jobs:
         python3 -c "from pathlib import Path; import os; p=Path('$TEMP_CONFIG'); s=p.read_text(encoding='utf-8'); s=s.replace('%GITHUB_ORG%', os.environ['GITHUB_ORG']).replace('%GITHUB_USERNAME%', os.environ['NUGET_AUTH_USERNAME']).replace('%GITHUB_TOKEN%', os.environ['NUGET_AUTH_TOKEN']); p.write_text(s, encoding='utf-8')"
 
         echo "Installing Xplor.AI.Metrics.BuildTool version: $TOOL_PACKAGE_VERSION"
-        echo "NuGet packages cache: $NUGET_PACKAGES"
 
         PACKAGE_ID_LOWER="xplor.ai.metrics.buildtool"
         NUPKG_URL="https://nuget.pkg.github.com/$GITHUB_ORG/download/$PACKAGE_ID_LOWER/$TOOL_PACKAGE_VERSION/$PACKAGE_ID_LOWER.$TOOL_PACKAGE_VERSION.nupkg"
@@ -260,60 +229,21 @@ jobs:
         rm -rf "$LOCAL_SOURCE_DIR"
         mkdir -p "$LOCAL_SOURCE_DIR"
 
-        if curl -fLsS -u "$NUGET_AUTH_USERNAME:$NUGET_AUTH_TOKEN" -o "$NUPKG_PATH" "$NUPKG_URL"; then
-          echo "Downloaded package for inspection: $NUPKG_PATH"
-
-          if file "$NUPKG_PATH" | grep -qi "Zip archive"; then
-            echo "Downloaded file is a valid ZIP container."
-          else
-            echo "::warning::Downloaded file is not a ZIP archive. First 200 bytes follow for diagnostics:"
-            head -c 200 "$NUPKG_PATH" | tr -d '\000' || true
-          fi
-
-          echo "Listing package entries related to tool settings and nuspec:"
-          unzip -l "$NUPKG_PATH" | grep -Ei "dotnettoolsettings|\.nuspec" || true
-
-          # Some packages published from Windows can contain backslash-separated ZIP entry names
-          # (e.g., tools\net8.0\any\DotnetToolSettings.xml). Linux dotnet tool install expects
-          # forward slashes in ZIP paths, so normalize entries for ubuntu-latest compatibility.
-          python3 -c "import zipfile; src='$NUPKG_PATH'; dst='$NORMALIZED_NUPKG_PATH'; zin=zipfile.ZipFile(src,'r'); zout=zipfile.ZipFile(dst,'w',compression=zipfile.ZIP_DEFLATED); [zout.writestr(info.filename.replace('\\\\','/'), zin.read(info.filename)) for info in zin.infolist()]; zin.close(); zout.close()"
-
-          if [ -f "$NORMALIZED_NUPKG_PATH" ]; then
-            echo "Listing normalized package entries related to tool settings and nuspec:"
-            unzip -l "$NORMALIZED_NUPKG_PATH" | grep -Ei "dotnettoolsettings|\.nuspec" || true
-          fi
-
-          if unzip -l "$NORMALIZED_NUPKG_PATH" | grep -q "tools/net8.0/any/DotnetToolSettings.xml"; then
-            echo "Found exact DotnetToolSettings.xml entry in package archive."
-            cp "$NORMALIZED_NUPKG_PATH" "$LOCAL_SOURCE_DIR/$PACKAGE_ID_LOWER.$TOOL_PACKAGE_VERSION.nupkg"
-            echo "Prepared local package source: $LOCAL_SOURCE_DIR"
-          else
-            echo "::warning::Exact DotnetToolSettings.xml entry not found in package archive."
-            echo "::warning::If a differently cased file exists (for example, dotnettoolsettings.xml), Windows may succeed while ubuntu-latest fails due to case sensitivity."
-          fi
-        else
-          echo "::warning::Could not download package archive for inspection from $NUPKG_URL"
+        if ! curl -fLsS -u "$NUGET_AUTH_USERNAME:$NUGET_AUTH_TOKEN" -o "$NUPKG_PATH" "$NUPKG_URL"; then
+          echo "::error::Could not download package archive from $NUPKG_URL"
+          exit 1
         fi
 
-        set +e
-        if [ -f "$LOCAL_SOURCE_DIR/$PACKAGE_ID_LOWER.$TOOL_PACKAGE_VERSION.nupkg" ]; then
-          INSTALL_OUTPUT=$(dotnet tool install Xplor.AI.Metrics.BuildTool --version "$TOOL_PACKAGE_VERSION" --tool-path "$TOOL_PATH" --add-source "$LOCAL_SOURCE_DIR" --ignore-failed-sources --verbosity detailed 2>&1)
-        else
-          INSTALL_OUTPUT=$(dotnet tool install Xplor.AI.Metrics.BuildTool --version "$TOOL_PACKAGE_VERSION" --tool-path "$TOOL_PATH" --configfile "$TEMP_CONFIG" --verbosity detailed 2>&1)
+        # Normalize backslash ZIP entry names for linux compatibility.
+        python3 -c "import zipfile; src='$NUPKG_PATH'; dst='$NORMALIZED_NUPKG_PATH'; zin=zipfile.ZipFile(src,'r'); zout=zipfile.ZipFile(dst,'w',compression=zipfile.ZIP_DEFLATED); [zout.writestr(info.filename.replace('\\\\','/'), zin.read(info.filename)) for info in zin.infolist()]; zin.close(); zout.close()"
+
+        if ! unzip -l "$NORMALIZED_NUPKG_PATH" | grep -q "tools/net8.0/any/DotnetToolSettings.xml"; then
+          echo "::error::Normalized package is missing tools/net8.0/any/DotnetToolSettings.xml"
+          exit 1
         fi
-        INSTALL_EXIT_CODE=$?
-        set -e
 
-        printf '%s\n' "$INSTALL_OUTPUT"
-
-        if [ "$INSTALL_EXIT_CODE" -ne 0 ]; then
-          if printf '%s\n' "$INSTALL_OUTPUT" | grep -q "DotnetToolSettings.xml"; then
-            echo "::error::Selected package version does not contain .NET tool metadata (DotnetToolSettings.xml)."
-            echo "::error::Verify tool_package_version points to a valid tool build (for example, 1.0.2) and that version was packed with PackAsTool=true."
-          fi
-
-          exit "$INSTALL_EXIT_CODE"
-        fi
+        cp "$NORMALIZED_NUPKG_PATH" "$LOCAL_SOURCE_DIR/$PACKAGE_ID_LOWER.$TOOL_PACKAGE_VERSION.nupkg"
+        dotnet tool install Xplor.AI.Metrics.BuildTool --version "$TOOL_PACKAGE_VERSION" --tool-path "$TOOL_PATH" --add-source "$LOCAL_SOURCE_DIR" --ignore-failed-sources
 
         rm -f "$TEMP_CONFIG"
         echo "$TOOL_PATH" >> $GITHUB_PATH
