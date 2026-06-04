@@ -180,10 +180,10 @@ jobs:
 
     - name: Install Xplor.AI.Metrics.BuildTool
       env:
-        NUGET_AUTH_USERNAME: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_USERNAME || 'x-access-token' }}
-        NUGET_AUTH_TOKEN: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_PAT || steps.package-reader-token.outputs.token }}
-        #NUGET_AUTH_USERNAME: 'x-access-token'
-        #NUGET_AUTH_TOKEN: ${{ steps.package-reader-token.outputs.token }}
+        #NUGET_AUTH_USERNAME: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_USERNAME || 'x-access-token' }}
+        #NUGET_AUTH_TOKEN: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_PAT || steps.package-reader-token.outputs.token }}
+        NUGET_AUTH_USERNAME: 'x-access-token'
+        NUGET_AUTH_TOKEN: ${{ steps.package-reader-token.outputs.token }}
         GITHUB_ORG: ${{ github.repository_owner }}
         TOOL_PACKAGE_VERSION: ${{ inputs.tool_package_version }}
         NUGET_PACKAGES: ${{ runner.temp }}/nuget-packages
