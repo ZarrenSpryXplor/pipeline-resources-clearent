@@ -261,6 +261,10 @@ jobs:
           exit 1
         fi
 
+        # Diagnostic: print raw ZIP entry names exactly as stored in the nupkg.
+        # This confirms whether DotnetToolSettings.xml is recorded with '\\' or '/'.
+        python3 -c "import zipfile; p='$NUPKG_PATH'; z=zipfile.ZipFile(p,'r'); names=[i.filename for i in z.infolist()]; print('Raw nupkg entries (up to first 80):'); [print(f' - {n}') for n in names[:80]]; has_backslash=any('\\\\' in n for n in names); has_settings_posix='tools/net8.0/any/DotnetToolSettings.xml' in names; has_settings_windows='tools\\\\net8.0\\\\any\\\\DotnetToolSettings.xml' in names; print(f'ZIP path diagnostics: has_backslash={has_backslash}, has_settings_posix={has_settings_posix}, has_settings_windows={has_settings_windows}'); z.close()"
+
         # Normalize backslash ZIP entry names for linux compatibility.
         python3 -c "import zipfile; src='$NUPKG_PATH'; dst='$NORMALIZED_NUPKG_PATH'; zin=zipfile.ZipFile(src,'r'); zout=zipfile.ZipFile(dst,'w',compression=zipfile.ZIP_DEFLATED); [zout.writestr(info.filename.replace('\\\\','/'), zin.read(info.filename)) for info in zin.infolist()]; zin.close(); zout.close()"
 
