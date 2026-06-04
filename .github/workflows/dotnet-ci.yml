@@ -235,7 +235,8 @@ jobs:
         rm -rf "$LOCAL_SOURCE_DIR"
         mkdir -p "$LOCAL_SOURCE_DIR"
 
-        if ! curl -fLsS -u "$NUGET_AUTH_USERNAME:$NUGET_AUTH_TOKEN" -o "$NUPKG_PATH" "$NUPKG_URL"; then
+        #if ! curl -fLsS -u "$NUGET_AUTH_USERNAME:$NUGET_AUTH_TOKEN" -o "$NUPKG_PATH" "$NUPKG_URL"; then
+        if ! curl -fLsS -H "Authorization: Bearer $NUGET_AUTH_TOKEN" -o "$NUPKG_PATH" "$NUPKG_URL"; then
           echo "::error::Could not download package archive from $NUPKG_URL"
           exit 1
         fi
