@@ -182,6 +182,9 @@ jobs:
       env:
         NUGET_AUTH_USERNAME: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_USERNAME || 'x-access-token' }}
         NUGET_AUTH_TOKEN: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_PAT || steps.package-reader-token.outputs.token }}
+        # Keep these aliases aligned with caller nuget.config placeholders (%GITHUB_USERNAME%/%GITHUB_TOKEN%).
+        GITHUB_USERNAME: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_USERNAME || 'x-access-token' }}
+        GITHUB_TOKEN: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_PAT || steps.package-reader-token.outputs.token }}
         #NUGET_AUTH_USERNAME: 'x-access-token'
         #NUGET_AUTH_TOKEN: ${{ steps.package-reader-token.outputs.token }}
         GITHUB_ORG: ${{ github.repository_owner }}
@@ -224,7 +227,7 @@ jobs:
             > "$TEMP_CONFIG"
         fi
 
-        python3 -c "from pathlib import Path; import os; p=Path('$TEMP_CONFIG'); s=p.read_text(encoding='utf-8'); s=s.replace('%GITHUB_ORG%', os.environ['GITHUB_ORG']).replace('%GITHUB_USERNAME%', os.environ['NUGET_AUTH_USERNAME']).replace('%GITHUB_TOKEN%', os.environ['NUGET_AUTH_TOKEN']); p.write_text(s, encoding='utf-8')"
+        python3 -c "from pathlib import Path; import os; p=Path('$TEMP_CONFIG'); s=p.read_text(encoding='utf-8'); s=s.replace('%GITHUB_ORG%', os.environ['GITHUB_ORG']).replace('%GITHUB_USERNAME%', os.environ['GITHUB_USERNAME']).replace('%GITHUB_TOKEN%', os.environ['GITHUB_TOKEN']); p.write_text(s, encoding='utf-8')"
 
 
         echo "Installing Xplor.AI.Metrics.BuildTool version: $TOOL_PACKAGE_VERSION"
