@@ -204,7 +204,8 @@ jobs:
         # in this run, not a stale cache entry from other restore operations.
         rm -rf "$NUGET_PACKAGES"
         mkdir -p "$NUGET_PACKAGES"
-        dotnet nuget locals all --clear >/dev/null 2>&1 || true
+        # Do not clear shared NuGet caches here. This job already restored repository dependencies,
+        # and later build/test use --no-restore.
 
         # Use caller nuget.config (same behavior as local success path) and resolve placeholders
         # into concrete values for CI execution.
