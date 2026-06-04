@@ -58,6 +58,12 @@ on:
         type: string
         default: 'Xplor.AI.Metrics.BuildTool'
 
+      tool_package_version:
+        description: 'Version of Xplor.AI.Metrics.BuildTool to install.'
+        required: false
+        type: string
+        default: '1.0.2'
+
 jobs:
   build:
 
@@ -199,6 +205,7 @@ jobs:
         NUGET_AUTH_USERNAME: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_USERNAME || 'x-access-token' }}
         NUGET_AUTH_TOKEN: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_PAT || steps.package-reader-token.outputs.token }}
         GITHUB_ORG: ${{ github.repository_owner }}
+        TOOL_PACKAGE_VERSION: ${{ inputs.tool_package_version }}
       run: |
         set -euo pipefail
 
@@ -224,8 +231,10 @@ jobs:
           '</configuration>' \
           > "$TEMP_CONFIG"
 
+        echo "Installing Xplor.AI.Metrics.BuildTool version: $TOOL_PACKAGE_VERSION"
+
         set +e
-        INSTALL_OUTPUT=$(dotnet tool install Xplor.AI.Metrics.BuildTool --tool-path "$TOOL_PATH" --configfile "$TEMP_CONFIG" 2>&1)
+        INSTALL_OUTPUT=$(dotnet tool install Xplor.AI.Metrics.BuildTool --version "$TOOL_PACKAGE_VERSION" --tool-path "$TOOL_PATH" --configfile "$TEMP_CONFIG" 2>&1)
         INSTALL_EXIT_CODE=$?
         set -e
 
@@ -233,8 +242,8 @@ jobs:
 
         if [ "$INSTALL_EXIT_CODE" -ne 0 ]; then
           if printf '%s\n' "$INSTALL_OUTPUT" | grep -q "DotnetToolSettings.xml"; then
-            echo "::error::Package Xplor.AI.Metrics.BuildTool is published as a NuGet package but is not packed as a .NET tool."
-            echo "::error::In the package repo, set <PackAsTool>true</PackAsTool> and <ToolCommandName>...</ToolCommandName> in the executable project, then republish."
+            echo "::error::Selected package version does not contain .NET tool metadata (DotnetToolSettings.xml)."
+            echo "::error::Verify tool_package_version points to a valid tool build (for example, 1.0.2) and that version was packed with PackAsTool=true."
           fi
 
           exit "$INSTALL_EXIT_CODE"
