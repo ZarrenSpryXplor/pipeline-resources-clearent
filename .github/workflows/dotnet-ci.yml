@@ -89,6 +89,38 @@ jobs:
           ${{ inputs.dotnet_version }}
           8.0.x
 
+    - name: Pin Active .NET SDK
+      run: |
+        set -euo pipefail
+
+        if [ -f ./global.json ]; then
+          echo "Repository global.json detected; honoring repository SDK pin."
+          cat ./global.json
+        else
+          REQUESTED="${{ inputs.dotnet_version }}"
+          PREFIX="${REQUESTED%x}"
+          SELECTED=$(dotnet --list-sdks | awk -v p="$PREFIX" '$1 ~ ("^" p) {print $1}' | sort -V | tail -1)
+
+          if [ -z "$SELECTED" ]; then
+            echo "::error::Could not find an installed SDK matching '${{ inputs.dotnet_version }}'."
+            dotnet --list-sdks
+            exit 1
+          fi
+
+          printf '%s\n' \
+            '{' \
+            '  "sdk": {' \
+            "    \"version\": \"$SELECTED\"," \
+            '    "rollForward": "disable"' \
+            '  }' \
+            '}' > ./global.json
+
+          echo "Generated temporary global.json to pin SDK to $SELECTED"
+          cat ./global.json
+        fi
+
+        echo "dotnet --version => $(dotnet --version)"
+
     - name: Generate Xplor Pay Package Reader App Token
       id: package-reader-token
       uses: actions/create-github-app-token@v3
@@ -206,6 +238,47 @@ jobs:
         print('Resolved Xplor.AI.Metrics.Annotations entries:')
         for assets, lib in resolved:
             print(f' - {lib} ({assets})')
+        PY
+
+    - name: Diagnose Annotations Compile Assets
+      run: |
+        set -euo pipefail
+
+        python3 - <<'PY'
+        import json
+        from pathlib import Path
+
+        package_prefix = 'xplor.ai.metrics.annotations/'
+        found = False
+
+        for assets in Path('.').rglob('obj/project.assets.json'):
+            data = json.loads(assets.read_text(encoding='utf-8'))
+            targets = data.get('targets', {})
+            for tfm, entries in targets.items():
+                for key, node in entries.items():
+                    if not key.lower().startswith(package_prefix):
+                        continue
+
+                    found = True
+                    compile_assets = sorted((node.get('compile') or {}).keys())
+                    runtime_assets = sorted((node.get('runtime') or {}).keys())
+
+                    print(f'[{assets}] target={tfm} package={key}')
+                    print('  compile assets:')
+                    if compile_assets:
+                        for a in compile_assets:
+                            print(f'    - {a}')
+                    else:
+                        print('    - <none>')
+                    print('  runtime assets:')
+                    if runtime_assets:
+                        for a in runtime_assets:
+                            print(f'    - {a}')
+                    else:
+                        print('    - <none>')
+
+        if not found:
+            print('::warning::No targets entry found for Xplor.AI.Metrics.Annotations in project.assets.json.')
         PY
 
     - name: Review Repository Dependencies for Vulnerabilities
