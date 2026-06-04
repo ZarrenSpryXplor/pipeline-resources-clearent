@@ -253,6 +253,7 @@ jobs:
 
         for assets in Path('.').rglob('obj/project.assets.json'):
             data = json.loads(assets.read_text(encoding='utf-8'))
+        libraries = data.get('libraries', {})
             targets = data.get('targets', {})
             for tfm, entries in targets.items():
                 for key, node in entries.items():
@@ -260,10 +261,19 @@ jobs:
                         continue
 
                     found = True
-                    compile_assets = sorted((node.get('compile') or {}).keys())
-                    runtime_assets = sorted((node.get('runtime') or {}).keys())
+            compile_assets = sorted((node.get('compile') or {}).keys())
+            runtime_assets = sorted((node.get('runtime') or {}).keys())
+            build_assets = sorted((node.get('build') or {}).keys())
+            build_transitive_assets = sorted((node.get('buildTransitive') or {}).keys())
+            analyzers = sorted((node.get('analyzers') or {}).keys())
+            content_files = sorted((node.get('contentFiles') or {}).keys())
+            metadata = libraries.get(key, {})
+            package_path = metadata.get('path', '<unknown>')
+            sha512 = metadata.get('sha512', '<unknown>')
 
                     print(f'[{assets}] target={tfm} package={key}')
+            print(f'  package path: {package_path}')
+            print(f'  package sha512: {sha512}')
                     print('  compile assets:')
                     if compile_assets:
                         for a in compile_assets:
@@ -276,6 +286,30 @@ jobs:
                             print(f'    - {a}')
                     else:
                         print('    - <none>')
+                    print('  build assets:')
+                    if build_assets:
+                      for a in build_assets:
+                        print(f'    - {a}')
+                    else:
+                      print('    - <none>')
+                    print('  buildTransitive assets:')
+                    if build_transitive_assets:
+                      for a in build_transitive_assets:
+                        print(f'    - {a}')
+                    else:
+                      print('    - <none>')
+                    print('  analyzers:')
+                    if analyzers:
+                      for a in analyzers:
+                        print(f'    - {a}')
+                    else:
+                      print('    - <none>')
+                    print('  contentFiles:')
+                    if content_files:
+                      for a in content_files:
+                        print(f'    - {a}')
+                    else:
+                      print('    - <none>')
 
         if not found:
             print('::warning::No targets entry found for Xplor.AI.Metrics.Annotations in project.assets.json.')
