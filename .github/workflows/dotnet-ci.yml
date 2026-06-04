@@ -83,7 +83,11 @@ jobs:
     - name: Setup .NET Environment
       uses: actions/setup-dotnet@v5
       with:
-        dotnet-version: ${{ inputs.dotnet_version }}
+        # Always install .NET 8 as well because Xplor.AI.Metrics.BuildTool is packaged under tools/net8.0.
+        # This keeps tool installation stable even when caller repositories build with older SDKs.
+        dotnet-version: |
+          ${{ inputs.dotnet_version }}
+          8.0.x
 
     - name: Generate Xplor Pay Package Reader App Token
       id: package-reader-token
@@ -240,6 +244,26 @@ jobs:
 
         echo "Installing Xplor.AI.Metrics.BuildTool version: $TOOL_PACKAGE_VERSION"
         echo "NuGet packages cache: $NUGET_PACKAGES"
+
+        PACKAGE_ID_LOWER="xplor.ai.metrics.buildtool"
+        NUPKG_URL="https://nuget.pkg.github.com/xplor-pay/download/$PACKAGE_ID_LOWER/$TOOL_PACKAGE_VERSION/$PACKAGE_ID_LOWER.$TOOL_PACKAGE_VERSION.nupkg"
+        NUPKG_PATH="${{ runner.temp }}/$PACKAGE_ID_LOWER.$TOOL_PACKAGE_VERSION.nupkg"
+
+        if curl -fsS -u "$NUGET_AUTH_USERNAME:$NUGET_AUTH_TOKEN" -o "$NUPKG_PATH" "$NUPKG_URL"; then
+          echo "Downloaded package for inspection: $NUPKG_PATH"
+
+          echo "Listing package entries related to tool settings and nuspec:"
+          unzip -l "$NUPKG_PATH" | grep -Ei "dotnettoolsettings|\.nuspec" || true
+
+          if unzip -l "$NUPKG_PATH" | grep -q "DotnetToolSettings.xml"; then
+            echo "Found exact DotnetToolSettings.xml entry in package archive."
+          else
+            echo "::warning::Exact DotnetToolSettings.xml entry not found in package archive."
+            echo "::warning::If a differently cased file exists (for example, dotnettoolsettings.xml), Windows may succeed while ubuntu-latest fails due to case sensitivity."
+          fi
+        else
+          echo "::warning::Could not download package archive for inspection from $NUPKG_URL"
+        fi
 
         set +e
         INSTALL_OUTPUT=$(dotnet tool install Xplor.AI.Metrics.BuildTool --version "$TOOL_PACKAGE_VERSION" --tool-path "$TOOL_PATH" --configfile "$TEMP_CONFIG" 2>&1)
