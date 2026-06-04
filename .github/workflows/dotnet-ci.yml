@@ -113,7 +113,7 @@ jobs:
         echo "Configured NuGet sources from ./nuget.config:"
         dotnet nuget list source --configfile ./nuget.config
 
-        FEED_URL="https://nuget.pkg.github.com/$GITHUB_ORG/index.json"
+        FEED_URL="https://nuget.pkg.github.com/xplor-pay/index.json"
         STATUS=$(curl -sS -o /dev/null -w "%{http_code}" -u "$GITHUB_USERNAME:$GITHUB_TOKEN" "$FEED_URL")
 
         if [ "$STATUS" != "200" ]; then
