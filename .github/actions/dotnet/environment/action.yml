@@ -26,6 +26,8 @@ runs:
       run: |
         set -euo pipefail
 
+        echo "::group::Pin Active .NET SDK"
+
         if [ -f ./global.json ]; then
           echo "Repository global.json detected; honoring repository SDK pin."
           cat ./global.json
@@ -63,3 +65,4 @@ runs:
         fi
 
         echo "dotnet --version => $(dotnet --version)"
+        echo "::endgroup::"
