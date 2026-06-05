@@ -1,0 +1,17 @@
+name: Environment Setup
+description: "Set up the environment for .NET projects."
+
+inputs:
+  dotnet_version:
+    description: 'The .NET SDK version to use for the build and test steps.'
+    required: true
+    default: '8.0.x'
+  
+runs:
+  using: "composite"
+
+  steps:
+    - name: Setup .NET Environment
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: ${{ inputs.dotnet_version }}
