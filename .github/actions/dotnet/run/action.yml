@@ -1,0 +1,56 @@
+name: Dotnet Run By Target
+description: Run a dotnet subcommand against a root solution, or each project when no solution exists.
+
+inputs:
+
+  command:
+    description: Dotnet CLI subcommand (for example format, build, test).
+    required: true
+
+  arguments:
+    description: Newline-delimited dotnet arguments.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+
+  steps:
+    - name: Run dotnet command by repository target
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        COMMAND="${{ inputs.command }}"
+
+        declare -a RAW_ARGS=()
+        mapfile -t RAW_ARGS < <(printf '%s\n' "${{ inputs.arguments }}")
+
+        declare -a ARGS=()
+        for arg in "${RAW_ARGS[@]}"; do
+          if [ -n "$arg" ]; then
+            ARGS+=("$arg")
+          fi
+        done
+
+        SLN_COUNT=$(find . -maxdepth 1 -name "*.sln" | wc -l)
+
+        if [ "$SLN_COUNT" -gt 0 ]; then
+          echo "Found solution file(s) in repository root. Running dotnet $COMMAND against solution context."
+          dotnet "$COMMAND" "${ARGS[@]}"
+          exit 0
+        fi
+
+        echo "No solution file found in repository root. Running dotnet $COMMAND for each project file."
+
+        PROJECT_FOUND=false
+        while IFS= read -r project; do
+          PROJECT_FOUND=true
+          echo "Running dotnet $COMMAND for $project"
+          dotnet "$COMMAND" "$project" "${ARGS[@]}"
+        done < <(find . -name "*.csproj")
+
+        if [ "$PROJECT_FOUND" = false ]; then
+          echo "::error::No .sln or .csproj files were found in this repository."
+          exit 1
+        fi

@@ -187,57 +187,47 @@ jobs:
         head-ref: ${{ inputs.head_ref }}
 
     - name: Enforce .editorconfig Code Styles
-      run: |
-        # Count .sln files in the root directory
-        SLN_COUNT=$(find . -maxdepth 1 -name "*.sln" | wc -l)
-
-        if [ "$SLN_COUNT" -gt 0 ]; then
-          echo "✅ Found Solution file(s) in root. Restoring via .sln..."
-          dotnet format --verbosity detailed --verify-no-changes
-        else
-          echo "⚠️ No .sln found in root. Building all .csproj files recursively..."
-          find . -name "*.csproj" -exec dotnet format --verbosity detailed --verify-no-changes {} +
-        fi
+      uses: xplor-pay/github-actions/.github/actions/dotnet/run@main
+      with:
+        command: format
+        arguments: |
+          --verbosity
+          detailed
+          --verify-no-changes
         
     - name: Build Repository
-      run: |
-        # Count .sln files in the root directory
-        SLN_COUNT=$(find . -maxdepth 1 -name "*.sln" | wc -l)
-
-        if [ "$SLN_COUNT" -gt 0 ]; then
-          echo "✅ Found Solution file(s) in root. Restoring via .sln..."
-          dotnet build --configuration Release --no-restore
-        else
-          echo "⚠️ No .sln found in root. Building all .csproj files recursively..."
-          find . -name "*.csproj" -exec dotnet build --configuration Release --no-restore {} +
-        fi
+      uses: xplor-pay/github-actions/.github/actions/dotnet/run@main
+      with:
+        command: build
+        arguments: |
+          --configuration
+          Release
+          --no-restore
 
     - name: Run Tests
-      run: | 
-        # Count .sln files in the root directory
-        SLN_COUNT=$(find . -maxdepth 1 -name "*.sln" | wc -l)
-
-        if [ "$SLN_COUNT" -gt 0 ]; then
-          echo "✅ Found Solution file(s) in root. Restoring via .sln..."
-          dotnet test --configuration Release \
-            --no-build \
-            --no-restore \
-            --verbosity normal \
-            "--filter:TestCategory!~Integration&Category!~Integration" \
-            --collect:"XPlat Code Coverage;Format=opencover,cobertura" \
-            --results-directory ./TestResults \
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SkipAutoProps=true DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude=[*Tests*]* DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeAssembliesWithoutSources=MissingAll DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SingleHit=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.IncludeTestAssembly=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.UseSourceLink=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.DeterministicReport=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByAttribute=Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute
-        else
-          echo "⚠️ No .sln found in root. Building all .csproj files recursively..."
-          find . -name "*.csproj" -exec dotnet test --configuration Release \
-            --no-build \
-            --no-restore \
-            --verbosity normal \
-            "--filter:TestCategory!~Integration&Category!~Integration" \
-            --collect:"XPlat Code Coverage;Format=opencover,cobertura" \
-            --results-directory ./TestResults \
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SkipAutoProps=true DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude=[*Tests*]* DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeAssembliesWithoutSources=MissingAll DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SingleHit=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.IncludeTestAssembly=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.UseSourceLink=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.DeterministicReport=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByAttribute=Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute {} +
-        fi
+      uses: xplor-pay/github-actions/.github/actions/dotnet/run@main
+      with:
+        command: test
+        arguments: |
+          --configuration
+          Release
+          --no-build
+          --no-restore
+          --verbosity
+          normal
+          --filter:TestCategory!~Integration&Category!~Integration
+          --collect:XPlat Code Coverage;Format=opencover,cobertura
+          --results-directory
+          ./TestResults
+          --
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SkipAutoProps=true
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude=[*Tests*]*
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeAssembliesWithoutSources=MissingAll
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SingleHit=false
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.IncludeTestAssembly=false
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.UseSourceLink=false
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.DeterministicReport=false
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByAttribute=Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute
 
     - name: Resolve Code Coverage Threshold
       id: coverage-threshold
