@@ -52,17 +52,23 @@ on:
         type: string
         default: '7'
 
-      tool_package_repository:
+      ai_metrics_package_repository:
         description: 'Repository that owns the Xplor.AI.Metrics.BuildTool package.'
         required: false
         type: string
         default: 'Xplor.AI.Metrics.BuildTool'
 
-      tool_package_version:
+      ai_metrics_package_version:
         description: 'Version of Xplor.AI.Metrics.BuildTool to install.'
         required: false
         type: string
         default: '1.0.2'
+
+      enforce_code_style:
+        description: 'Toggle to indicate whether code style enforcement should be applied.'
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   build:
@@ -140,7 +146,7 @@ jobs:
         owner: ${{ github.repository_owner }}
         repositories: |
           ${{ github.event.repository.name }}
-          ${{ inputs.tool_package_repository }}
+          ${{ inputs.ai_metrics_package_repository }}
 
     - name: Verify Authentication to GitHub Packages
       env:
@@ -152,7 +158,7 @@ jobs:
         #USE_PAT_AUTH: 'false'
 
         GITHUB_ORG: ${{ github.repository_owner }}
-        TOOL_REPOSITORY: ${{ inputs.tool_package_repository }}
+        AI_METRICS_REPOSITORY: ${{ inputs.ai_metrics_package_repository }}
       run: |
         set -euo pipefail
         dotnet --list-sdks
@@ -188,7 +194,7 @@ jobs:
             "https://api.github.com/installation/repositories")
 
           if [ "$INSTALL_REPOS_STATUS" = "200" ]; then
-            if ! python3 -c "import json,sys; d=json.load(open('$INSTALL_REPOS_JSON')); target='$GITHUB_ORG/$TOOL_REPOSITORY'.lower(); names={r.get('full_name','').lower() for r in d.get('repositories',[])}; ok=target in names; print(f'Installation token scope includes {target}.' if ok else f'::error::GitHub App token installation scope does not include {target}. Update app installation repository access or token scoping.'); sys.exit(0 if ok else 1)"
+            if ! python3 -c "import json,sys; d=json.load(open('$INSTALL_REPOS_JSON')); target='$GITHUB_ORG/$AI_METRICS_REPOSITORY'.lower(); names={r.get('full_name','').lower() for r in d.get('repositories',[])}; ok=target in names; print(f'Installation token scope includes {target}.' if ok else f'::error::GitHub App token installation scope does not include {target}. Update app installation repository access or token scoping.'); sys.exit(0 if ok else 1)"
             then
               exit 1
             fi
@@ -234,7 +240,7 @@ jobs:
         #NUGET_AUTH_USERNAME: 'x-access-token'
         #NUGET_AUTH_TOKEN: ${{ steps.package-reader-token.outputs.token }}
         GITHUB_ORG: ${{ github.repository_owner }}
-        TOOL_PACKAGE_VERSION: ${{ inputs.tool_package_version }}
+        AI_METRICS_PACKAGE_VERSION: ${{ inputs.ai_metrics_package_version }}
       run: |
         set -euo pipefail
 
@@ -269,12 +275,12 @@ jobs:
         python3 -c "from pathlib import Path; import os; p=Path('$TEMP_CONFIG'); s=p.read_text(encoding='utf-8'); s=s.replace('%GITHUB_ORG%', os.environ['GITHUB_ORG']).replace('%GITHUB_USERNAME%', os.environ['GITHUB_USERNAME']).replace('%GITHUB_TOKEN%', os.environ['GITHUB_TOKEN']); p.write_text(s, encoding='utf-8')"
 
 
-        echo "Installing Xplor.AI.Metrics.BuildTool version: $TOOL_PACKAGE_VERSION"
+        echo "Installing Xplor.AI.Metrics.BuildTool version: $AI_METRICS_PACKAGE_VERSION"
 
         PACKAGE_ID_LOWER="xplor.ai.metrics.buildtool"
-        NUPKG_URL="https://nuget.pkg.github.com/$GITHUB_ORG/download/$PACKAGE_ID_LOWER/$TOOL_PACKAGE_VERSION/$PACKAGE_ID_LOWER.$TOOL_PACKAGE_VERSION.nupkg"
-        NUPKG_PATH="${{ runner.temp }}/$PACKAGE_ID_LOWER.$TOOL_PACKAGE_VERSION.nupkg"
-        NORMALIZED_NUPKG_PATH="${{ runner.temp }}/$PACKAGE_ID_LOWER.$TOOL_PACKAGE_VERSION.normalized.nupkg"
+        NUPKG_URL="https://nuget.pkg.github.com/$GITHUB_ORG/download/$PACKAGE_ID_LOWER/$AI_METRICS_PACKAGE_VERSION/$PACKAGE_ID_LOWER.$AI_METRICS_PACKAGE_VERSION.nupkg"
+        NUPKG_PATH="${{ runner.temp }}/$PACKAGE_ID_LOWER.$AI_METRICS_PACKAGE_VERSION.nupkg"
+        NORMALIZED_NUPKG_PATH="${{ runner.temp }}/$PACKAGE_ID_LOWER.$AI_METRICS_PACKAGE_VERSION.normalized.nupkg"
         LOCAL_SOURCE_DIR="${{ runner.temp }}/tool-package-source"
 
         rm -rf "$LOCAL_SOURCE_DIR"
@@ -284,7 +290,7 @@ jobs:
         # endpoints rather than the raw /download URL, so auth behaves differently).
         echo "Attempting dotnet tool install via NuGet protocol..."
         if dotnet tool install Xplor.AI.Metrics.BuildTool \
-            --version "$TOOL_PACKAGE_VERSION" \
+            --version "$AI_METRICS_PACKAGE_VERSION" \
             --tool-path "$TOOL_PATH" \
             --configfile "$TEMP_CONFIG"; then
           echo "Tool installed successfully via NuGet protocol"
@@ -315,8 +321,8 @@ jobs:
           exit 1
         fi
 
-        cp "$NORMALIZED_NUPKG_PATH" "$LOCAL_SOURCE_DIR/$PACKAGE_ID_LOWER.$TOOL_PACKAGE_VERSION.nupkg"
-        dotnet tool install Xplor.AI.Metrics.BuildTool --version "$TOOL_PACKAGE_VERSION" --tool-path "$TOOL_PATH" --add-source "$LOCAL_SOURCE_DIR" --ignore-failed-sources
+        cp "$NORMALIZED_NUPKG_PATH" "$LOCAL_SOURCE_DIR/$PACKAGE_ID_LOWER.$AI_METRICS_PACKAGE_VERSION.nupkg"
+        dotnet tool install Xplor.AI.Metrics.BuildTool --version "$AI_METRICS_PACKAGE_VERSION" --tool-path "$TOOL_PATH" --add-source "$LOCAL_SOURCE_DIR" --ignore-failed-sources
 
         rm -f "$TEMP_CONFIG"
         echo "$TOOL_PATH" >> $GITHUB_PATH
