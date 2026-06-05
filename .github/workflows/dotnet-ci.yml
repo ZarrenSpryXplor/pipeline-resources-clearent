@@ -161,10 +161,12 @@ jobs:
 
     - name: Restore Repository Dependencies
       uses: xplor-pay/github-actions/.github/actions/dotnet/run@main
+      env:
+        # Keep these aliases aligned with caller nuget.config placeholders.
+        GITHUB_USERNAME: ${{ secrets.XPLOR_PAY_PACKAGE_READ_USERNAME }}
+        GITHUB_TOKEN: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT }}
       with:
         command: restore
-        github_username: ${{ secrets.XPLOR_PAY_PACKAGE_READ_USERNAME }}
-        github_token: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT }}
         arguments: |
           --configfile
           ./nuget.config
