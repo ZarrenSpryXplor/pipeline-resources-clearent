@@ -98,11 +98,21 @@ jobs:
           cat ./global.json
         else
           REQUESTED="${{ inputs.dotnet_version }}"
-          PREFIX="${REQUESTED%x}"
+          # Enforce a minimum of .NET 8 for restore/build because repositories and tooling
+          # in this workflow can target net8.0 even when callers pass an older SDK input.
+          REQUESTED_MAJOR="${REQUESTED%%.*}"
+          if [ "$REQUESTED_MAJOR" -lt 8 ]; then
+            EFFECTIVE_REQUESTED="8.0.x"
+            echo "Requested SDK '$REQUESTED' is below minimum supported '8.0.x'; using '$EFFECTIVE_REQUESTED'."
+          else
+            EFFECTIVE_REQUESTED="$REQUESTED"
+          fi
+
+          PREFIX="${EFFECTIVE_REQUESTED%x}"
           SELECTED=$(dotnet --list-sdks | awk -v p="$PREFIX" '$1 ~ ("^" p) {print $1}' | sort -V | tail -1)
 
           if [ -z "$SELECTED" ]; then
-            echo "::error::Could not find an installed SDK matching '${{ inputs.dotnet_version }}'."
+            echo "::error::Could not find an installed SDK matching '$EFFECTIVE_REQUESTED' (requested: '$REQUESTED')."
             dotnet --list-sdks
             exit 1
           fi
