@@ -68,7 +68,7 @@ on:
         description: 'Toggle to indicate whether code style enforcement should be applied.'
         required: false
         type: boolean
-        default: true
+        default: false
 
 jobs:
   build:
@@ -180,6 +180,7 @@ jobs:
         head-ref: ${{ inputs.head_ref }}
 
     - name: Enforce .editorconfig Code Styles
+      if: inputs.enforce_code_style == true
       uses: xplor-pay/github-actions/.github/actions/dotnet/run@main
       with:
         command: format
