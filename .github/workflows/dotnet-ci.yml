@@ -225,120 +225,132 @@ jobs:
 
     - name: Resolve Code Coverage Threshold
       id: coverage-threshold
+      uses: xplor-pay/github-actions/.github/actions/dotnet/coverage@main
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        set -euo pipefail
-
-        DEFAULT_BRANCH=${{ github.event.repository.default_branch }}
-        MINIMUM="${{ inputs.minimum_coverage_threshold }}"
-        BASELINE=""
-
-        if gh run download --name coverage-baseline \
-                          --branch "$DEFAULT_BRANCH" \
-                          --repo "${{ github.repository }}" 2>/dev/null && [ -f coverage.txt ]; then
-          BASELINE=$(cat coverage.txt)
-        else
-          BASELINE="${{ inputs.baseline_coverage_threshold }}"
-          echo "$BASELINE" > coverage.txt
-        fi
-
-        EFFECTIVE_THRESHOLD=$(awk "BEGIN { b=$BASELINE; m=$MINIMUM; if (b > m) printf \"%.2f\", b; else printf \"%.2f\", m }")
-        # ReportGenerator expects an integer for lineCoverage.
-        EFFECTIVE_THRESHOLD_INT=$(awk "BEGIN { t=$EFFECTIVE_THRESHOLD; if (t == int(t)) printf \"%d\", t; else printf \"%d\", int(t)+1 }")
-
-        echo "baseline_value=$BASELINE" >> $GITHUB_OUTPUT
-        echo "effective_threshold=$EFFECTIVE_THRESHOLD_INT" >> $GITHUB_OUTPUT
-
-    - name: Generate Code Coverage Report
-      uses: danielpalme/ReportGenerator-GitHub-Action@5.5.7
       with:
-        reports: '**/TestResults/**/coverage.cobertura.xml'
-        targetdir: 'coveragereport'
-        reporttypes: 'HtmlInline;MarkdownSummary'
-        customSettings: 'minimumCoverageThresholds:lineCoverage=${{ steps.coverage-threshold.outputs.effective_threshold }}'
+        dotnet_version: ${{ inputs.dotnet_version }}
+        baseline_coverage_threshold: ${{ inputs.baseline_coverage_threshold }}
+        minimum_coverage_threshold: ${{ inputs.minimum_coverage_threshold }}
+        artifact_retention_days: ${{ inputs.artifact_retention_days }}
 
-    - name: Publish Code Coverage Summary to GitHub Action Summary
-      run: cat coveragereport/Summary.md >> $GITHUB_STEP_SUMMARY
+#    - name: Resolve Code Coverage Threshold
+#      id: coverage-threshold
+#      uses: xplor-pay/github-actions/.github/actions/dotnet/coverage@main
+#      env:
+#        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#      run: |
+#        set -euo pipefail
+#
+#        DEFAULT_BRANCH=${{ github.event.repository.default_branch }}
+#        MINIMUM="${{ inputs.minimum_coverage_threshold }}"
+#        BASELINE=""
+#
+#        if gh run download --name coverage-baseline \
+#                          --branch "$DEFAULT_BRANCH" \
+#                          --repo "${{ github.repository }}" 2>/dev/null && [ -f coverage.txt ]; then
+#          BASELINE=$(cat coverage.txt)
+#        else
+#          BASELINE="${{ inputs.baseline_coverage_threshold }}"
+#          echo "$BASELINE" > coverage.txt
+#        fi
+#
+#        EFFECTIVE_THRESHOLD=$(awk "BEGIN { b=$BASELINE; m=$MINIMUM; if (b > m) printf \"%.2f\", b; else printf \"%.2f\", m }")
+#        # ReportGenerator expects an integer for lineCoverage.
+#        EFFECTIVE_THRESHOLD_INT=$(awk "BEGIN { t=$EFFECTIVE_THRESHOLD; if (t == int(t)) printf \"%d\", t; else printf \"%d\", int(t)+1 }")
+#
+#        echo "baseline_value=$BASELINE" >> $GITHUB_OUTPUT
+#        echo "effective_threshold=$EFFECTIVE_THRESHOLD_INT" >> $GITHUB_OUTPUT
 
-    - name: Upload HTML Code Coverage Report Artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: code-coverage-report-${{ inputs.dotnet_version }}
-        path: coveragereport
-        retention-days: ${{ inputs.artifact_retention_days }}
+#    - name: Generate Code Coverage Report
+#      uses: danielpalme/ReportGenerator-GitHub-Action@5.5.7
+#      with:
+#        reports: '**/TestResults/**/coverage.cobertura.xml'
+#        targetdir: 'coveragereport'
+#        reporttypes: 'HtmlInline;MarkdownSummary'
+#        customSettings: 'minimumCoverageThresholds:lineCoverage=${{ steps.coverage-threshold.outputs.effective_threshold }}'
+#
+#    - name: Publish Code Coverage Summary to GitHub Action Summary
+#      run: cat coveragereport/Summary.md >> $GITHUB_STEP_SUMMARY
+#
+#    - name: Upload HTML Code Coverage Report Artifact
+#      uses: actions/upload-artifact@v7
+#      with:
+#        name: code-coverage-report-${{ inputs.dotnet_version }}
+#        path: coveragereport
+#        retention-days: ${{ inputs.artifact_retention_days }}
 
     # Coverage regression is evaluated only for pull requests.
-    - name: Compare Code Coverage Percentage to Threshold
-      id: coverage-logic
-      if: github.event_name == 'pull_request'
-      run: |
-        # 1. Extract new percentage from Cobertura XML for stable parsing.
-        COVERAGE_FILE=$(find . -path "*/TestResults/*/coverage.cobertura.xml" | head -1)
-        NEW_RATIO=$(grep -oPm1 '(?<=line-rate=")[0-9.]+' "$COVERAGE_FILE")
-        NEW_PCT=$(awk "BEGIN { printf \"%.2f\", $NEW_RATIO * 100 }")
-        echo "new_pct=$NEW_PCT" >> $GITHUB_OUTPUT
+#    - name: Compare Code Coverage Percentage to Threshold
+#      id: coverage-logic
+#      if: github.event_name == 'pull_request'
+#      run: |
+#        # 1. Extract new percentage from Cobertura XML for stable parsing.
+#        COVERAGE_FILE=$(find . -path "*/TestResults/*/coverage.cobertura.xml" | head -1)
+#        NEW_RATIO=$(grep -oPm1 '(?<=line-rate=")[0-9.]+' "$COVERAGE_FILE")
+#        NEW_PCT=$(awk "BEGIN { printf \"%.2f\", $NEW_RATIO * 100 }")
+#        echo "new_pct=$NEW_PCT" >> $GITHUB_OUTPUT
+#
+#        # 2. Use resolved baseline value from the threshold step.
+#        BASELINE="${{ steps.coverage-threshold.outputs.baseline_value }}"
+#        echo "baseline_pct=$BASELINE" >> $GITHUB_OUTPUT
+#
+#        # 3. Comparison
+#        if (( $(echo "$NEW_PCT < $BASELINE" | bc -l) )); then
+#          echo "status=fail" >> $GITHUB_OUTPUT
+#        else
+#          echo "status=pass" >> $GITHUB_OUTPUT
+#        fi
+#
+#    - name: Prepare or Update Baseline Code Coverage File
+#      if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+#      run: |
+#        # Build baseline from Cobertura XML on default-branch non-PR runs.
+#        COVERAGE_FILE=$(find . -path "*/TestResults/*/coverage.cobertura.xml" | head -1)
+#        BASELINE_RATIO=$(grep -oPm1 '(?<=line-rate=")[0-9.]+' "$COVERAGE_FILE")
+#        BASELINE_PCT=$(awk "BEGIN { printf \"%.2f\", $BASELINE_RATIO * 100 }")
+#        echo "$BASELINE_PCT" > coverage.txt
+#
+#    # PR comment formatting and posting are skipped for non-PR runs.
+#    - name: Read Code Coverage Summary for Pull Request Comment
+#      id: read-summary
+#      if: github.event_name == 'pull_request'
+#      run: |
+#        # Use a unique delimiter for the multi-line output
+#        EOF=$(dd if=/dev/urandom bs=15 count=1 2>/dev/null | base64)
+#        echo "summary<<$EOF" >> $GITHUB_OUTPUT
+#        cat coveragereport/Summary.md >> $GITHUB_OUTPUT
+#        echo "$EOF" >> $GITHUB_OUTPUT
 
-        # 2. Use resolved baseline value from the threshold step.
-        BASELINE="${{ steps.coverage-threshold.outputs.baseline_value }}"
-        echo "baseline_pct=$BASELINE" >> $GITHUB_OUTPUT
-
-        # 3. Comparison
-        if (( $(echo "$NEW_PCT < $BASELINE" | bc -l) )); then
-          echo "status=fail" >> $GITHUB_OUTPUT
-        else
-          echo "status=pass" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Prepare or Update Baseline Code Coverage File
-      if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-      run: |
-        # Build baseline from Cobertura XML on default-branch non-PR runs.
-        COVERAGE_FILE=$(find . -path "*/TestResults/*/coverage.cobertura.xml" | head -1)
-        BASELINE_RATIO=$(grep -oPm1 '(?<=line-rate=")[0-9.]+' "$COVERAGE_FILE")
-        BASELINE_PCT=$(awk "BEGIN { printf \"%.2f\", $BASELINE_RATIO * 100 }")
-        echo "$BASELINE_PCT" > coverage.txt
-
-    # PR comment formatting and posting are skipped for non-PR runs.
-    - name: Read Code Coverage Summary for Pull Request Comment
-      id: read-summary
-      if: github.event_name == 'pull_request'
-      run: |
-        # Use a unique delimiter for the multi-line output
-        EOF=$(dd if=/dev/urandom bs=15 count=1 2>/dev/null | base64)
-        echo "summary<<$EOF" >> $GITHUB_OUTPUT
-        cat coveragereport/Summary.md >> $GITHUB_OUTPUT
-        echo "$EOF" >> $GITHUB_OUTPUT
-
-    - name: Add Comment to Pull Request with the Code Coverage Summary
-      uses: mshick/add-pr-comment@v3
-      if: github.event_name == 'pull_request'
-      with:
-        message-id: coverage-report
-        message: |
-          ### 📊 Code Coverage Summary
-          ${{ steps.read-summary.outputs.summary }}
-            
-          **Regression Check**: ${{ steps.coverage-logic.outputs.status == 'pass' && '✅ Passed' || '❌ Failed' }}
-          * New: `${{ steps.coverage-logic.outputs.new_pct }}%` | Baseline: `${{ steps.coverage-logic.outputs.baseline_pct }}%`
-            
-          ---
-          🔍 [View Run Summary](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-        update-only: true
-
-    # Fail PR runs when regression check reports lower coverage than baseline.
-    - name: Fail Pull Request Verifications if Code Coverage Does Not Meet Threshold
-      if: github.event_name == 'pull_request' && steps.coverage-logic.outputs.status == 'fail'
-      run: exit 1
-
-    # This step ensures that if we are on the default branch, we update the baseline for future PRs
-    - name: Update Baseline Code Coverage Artifact
-      if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-      uses: actions/upload-artifact@v7
-      with:
-        name: coverage-baseline
-        path: coverage.txt
-        retention-days: ${{ inputs.artifact_retention_days }}
+#    - name: Add Comment to Pull Request with the Code Coverage Summary
+#      uses: mshick/add-pr-comment@v3
+#      if: github.event_name == 'pull_request'
+#      with:
+#        message-id: coverage-report
+#        message: |
+#          ### 📊 Code Coverage Summary
+#          ${{ steps.read-summary.outputs.summary }}
+#            
+#          **Regression Check**: ${{ steps.coverage-logic.outputs.status == 'pass' && '✅ Passed' || '❌ Failed' }}
+#          * New: `${{ steps.coverage-logic.outputs.new_pct }}%` | Baseline: `${{ steps.coverage-logic.outputs.baseline_pct }}%`
+#            
+#          ---
+#          🔍 [View Run Summary](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+#        update-only: true
+#
+#    # Fail PR runs when regression check reports lower coverage than baseline.
+#    - name: Fail Pull Request Verifications if Code Coverage Does Not Meet Threshold
+#      if: github.event_name == 'pull_request' && steps.coverage-logic.outputs.status == 'fail'
+#      run: exit 1
+#
+#    # This step ensures that if we are on the default branch, we update the baseline for future PRs
+#    - name: Update Baseline Code Coverage Artifact
+#      if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+#      uses: actions/upload-artifact@v7
+#      with:
+#        name: coverage-baseline
+#        path: coverage.txt
+#        retention-days: ${{ inputs.artifact_retention_days }}
 
     - name: AI Metrics - Install Xplor.AI.Metrics.BuildTool
       env:
