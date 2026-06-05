@@ -58,6 +58,11 @@ runs:
 
         echo "::endgroup::"
 
+    - name: Coverage Report - Start
+      shell: bash
+      run: |
+        echo "::notice::Starting code coverage report generation..."
+
     - name: Generate Code Coverage Report
       uses: danielpalme/ReportGenerator-GitHub-Action@5.5.7
       with:
@@ -66,9 +71,31 @@ runs:
         reporttypes: 'HtmlInline;MarkdownSummary'
         customSettings: 'minimumCoverageThresholds:lineCoverage=${{ steps.coverage-threshold.outputs.effective_threshold }}'
 
+    - name: Coverage Report - End
+      if: ${{ always() }}
+      shell: bash
+      run: |
+        if [ "${{ job.status }}" = "success" ]; then
+          echo "::notice::Code coverage report generation completed."
+        else
+          echo "::warning::Code coverage report generation finished with status: ${{ job.status }}"
+        fi
+
     - name: Publish Code Coverage Summary to GitHub Action Summary
       shell: bash
-      run: cat coveragereport/Summary.md >> $GITHUB_STEP_SUMMARY
+      run: |
+        set -euo pipefail
+
+        echo "::group::Publish Code Coverage Summary to GitHub Action Summary"
+
+        cat coveragereport/Summary.md >> $GITHUB_STEP_SUMMARY
+
+        echo "::endgroup::"
+
+    - name: Upload Coverage Report Artifact - Start
+      shell: bash
+      run: |
+        echo "::notice::Starting code coverage report upload as build artifact..."
 
     - name: Upload HTML Code Coverage Report Artifact
       uses: actions/upload-artifact@v7
@@ -76,6 +103,16 @@ runs:
         name: code-coverage-report-${{ inputs.dotnet_version }}
         path: coveragereport
         retention-days: ${{ inputs.artifact_retention_days }}
+
+    - name: Upload Coverage Report Artifact - End
+      if: ${{ always() }}
+      shell: bash
+      run: |
+        if [ "${{ job.status }}" = "success" ]; then
+          echo "::notice::Code coverage report upload completed."
+        else
+          echo "::warning::Code coverage report upload finished with status: ${{ job.status }}"
+        fi
 
     - name: Compare Code Coverage Percentage to Threshold
       id: coverage-logic
@@ -139,6 +176,12 @@ runs:
 
         echo "::endgroup::"
 
+    - name: Add Comment to Pull Request with the Code Coverage Summary - Start
+      if: github.event_name == 'pull_request'
+      shell: bash
+      run: |
+        echo "::notice::Adding comment to pull request with code coverage summary..."
+
     - name: Add Comment to Pull Request with the Code Coverage Summary
       uses: mshick/add-pr-comment@v3
       if: github.event_name == 'pull_request'
@@ -155,11 +198,34 @@ runs:
           🔍 [View Run Summary](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
         update-only: true
 
+    - name: Add Comment to Pull Request with the Code Coverage Summary - End
+      if: ${{ github.event_name == 'pull_request' && always() }}
+      shell: bash
+      run: |
+        if [ "${{ job.status }}" = "success" ]; then
+          echo "::notice::Comment successfully added to pull request."
+        else
+          echo "::warning::Comment addition to pull request finished with status: ${{ job.status }}"
+        fi
+
     # Fail PR runs when regression check reports lower coverage than baseline.
     - name: Fail Pull Request Verifications if Code Coverage Does Not Meet Threshold
       if: github.event_name == 'pull_request' && steps.coverage-logic.outputs.status == 'fail'
       shell: bash
-      run: exit 1
+      run: |
+        echo "::group::Fail Pull Request Verifications if Code Coverage Does Not Meet Threshold"
+        
+        echo "::error::Code coverage check failed. New coverage of ${{ steps.coverage-logic.outputs.new_pct }}% does not meet the baseline threshold of ${{ steps.coverage-logic.outputs.baseline_pct }}%."
+
+        echo "::endgroup::"
+
+        exit 1
+
+    - name: Update Baseline Code Coverage Artifact - Start
+      if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      shell: bash
+      run: |
+        echo "::notice::Updating baseline code coverage artifact..."
 
     # This step ensures that if we are on the default branch, we update the baseline for future PRs
     - name: Update Baseline Code Coverage Artifact
@@ -169,3 +235,13 @@ runs:
         name: coverage-baseline
         path: coverage.txt
         retention-days: ${{ inputs.artifact_retention_days }}
+
+    - name: Update Baseline Code Coverage Artifact - End
+      if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && always() }}
+      shell: bash
+      run: |
+        if [ "${{ job.status }}" = "success" ]; then
+          echo "::notice::Baseline code coverage artifact successfully updated."
+        else
+          echo "::warning::Baseline code coverage artifact update finished with status: ${{ job.status }}"
+        fi
