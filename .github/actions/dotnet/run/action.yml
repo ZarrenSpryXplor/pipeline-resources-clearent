@@ -12,12 +12,25 @@ inputs:
     required: false
     default: ''
 
+  github_username:
+    description: Optional GitHub Packages username for authenticated dotnet operations.
+    required: false
+    default: ''
+
+  github_token:
+    description: Optional GitHub Packages token for authenticated dotnet operations.
+    required: false
+    default: ''
+
 runs:
   using: composite
 
   steps:
     - name: Run dotnet command by repository target
       shell: bash
+      env:
+        GITHUB_USERNAME: ${{ inputs.github_username }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}
       run: |
         set -euo pipefail
 

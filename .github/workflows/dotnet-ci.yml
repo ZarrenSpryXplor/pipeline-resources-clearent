@@ -160,23 +160,14 @@ jobs:
         echo "GitHub Packages auth preflight succeeded (HTTP $STATUS)."
 
     - name: Restore Repository Dependencies
-      env:
-        # Keep these aliases aligned with caller nuget.config placeholders.
-        GITHUB_USERNAME: ${{ secrets.XPLOR_PAY_PACKAGE_READ_USERNAME }}
-        GITHUB_TOKEN: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT }}
-        #GITHUB_USERNAME: 'x-access-token'
-        #GITHUB_TOKEN: ${{ steps.package-reader-token.outputs.token }}
-      run: |
-        # Count .sln files in the root directory
-        SLN_COUNT=$(find . -maxdepth 1 -name "*.sln" | wc -l)
-
-        if [ "$SLN_COUNT" -gt 0 ]; then
-          echo "✅ Found Solution file(s) in root. Restoring via .sln..."
-          dotnet restore --configfile ./nuget.config
-        else
-          echo "⚠️ No .sln found in root. Restoring all .csproj files recursively..."
-          find . -name "*.csproj" -exec dotnet restore --configfile ./nuget.config {} +
-        fi
+      uses: xplor-pay/github-actions/.github/actions/dotnet/run@main
+      with:
+        command: restore
+        github_username: ${{ secrets.XPLOR_PAY_PACKAGE_READ_USERNAME }}
+        github_token: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT }}
+        arguments: |
+          --configfile
+          ./nuget.config
 
     - name: Review Repository Dependencies for Vulnerabilities
       if: github.event_name == 'pull_request'
