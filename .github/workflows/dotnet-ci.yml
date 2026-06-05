@@ -241,10 +241,9 @@ jobs:
         GITHUB_ORG: ${{ github.repository_owner }}
         AI_METRICS_PACKAGE_VERSION: ${{ inputs.ai_metrics_package_version }}
       run: |
-        dotnet tool install Xplor.AI.Metrics.BuildTool --version "$AI_METRICS_PACKAGE_VERSION" --tool-path "$TOOL_PATH" --configfile "./nuget.config" --ignore-failed-sources # --add-source "$LOCAL_SOURCE_DIR" --ignore-failed-sources
+        dotnet tool install Xplor.AI.Metrics.BuildTool --version "$AI_METRICS_PACKAGE_VERSION" --tool-path "$TOOL_PATH" --configfile "./nuget.config" --ignore-failed-sources 
 
-        set -euo pipefail
-#
+      #set -euo pipefail
         #TOOL_PATH="${{ runner.temp }}/tools"
         #TEMP_CONFIG="${{ runner.temp }}/nuget.tool.config"
 #
