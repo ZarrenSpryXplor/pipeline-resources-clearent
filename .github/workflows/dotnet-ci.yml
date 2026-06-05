@@ -223,7 +223,7 @@ jobs:
           DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.DeterministicReport=false
           DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByAttribute=Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute
 
-    - name: Resolve Code Coverage Threshold
+    - name: Code Coverage Analysis, Enforcement, and Reporting
       id: coverage-threshold
       uses: xplor-pay/github-actions/.github/actions/dotnet/coverage@main
       env:
