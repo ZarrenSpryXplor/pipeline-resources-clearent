@@ -89,11 +89,7 @@ jobs:
     - name: Setup .NET Environment
       uses: xplor-pay/github-actions/.github/actions/dotnet/environment@main
       with:
-        # Always install .NET 8 as well because Xplor.AI.Metrics.BuildTool is packaged under tools/net8.0.
-        # This keeps tool installation stable even when caller repositories build with older SDKs.
-        dotnet_version: |
-          ${{ inputs.dotnet_version }}
-          8.0.x
+        dotnet_version: ${{ inputs.dotnet_version }}
 
     - name: Generate Xplor Pay Package Reader App Token
       id: package-reader-token

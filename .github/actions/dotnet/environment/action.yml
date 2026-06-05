@@ -14,9 +14,13 @@ runs:
     - name: Setup .NET Environment
       uses: actions/setup-dotnet@v5
       with:
-        dotnet-version: ${{ inputs.dotnet_version }}
+        # Always install .NET 8 as well because Xplor.AI.Metrics.BuildTool is packaged under tools/net8.0.
+        # This keeps tool installation stable even when caller repositories build with older SDKs.
+        dotnet-version: |
+          ${{ inputs.dotnet_version }}
+          8.0.x
 
-# Pin the active .NET SDK for the build in case it is older than the version needed by Xplor.AI.Metrics.BuildTool.
+    # Pin the active .NET SDK for the build in case it is older than the version needed by Xplor.AI.Metrics.BuildTool.
     - name: Pin Active .NET SDK
       shell: bash
       run: |
