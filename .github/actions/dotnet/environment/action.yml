@@ -20,7 +20,7 @@ runs:
           ${{ inputs.dotnet_version }}
           8.0.x
 
-    # Pin the active .NET SDK for the build in case it is older than the version needed by Xplor.AI.Metrics.BuildTool.
+    # Pin the active .NET SDK for the build in case the requested version is older than the version needed by Xplor.AI.Metrics.BuildTool.
     - name: Pin Active .NET SDK
       shell: bash
       run: |
