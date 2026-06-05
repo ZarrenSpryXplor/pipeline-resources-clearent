@@ -95,49 +95,6 @@ jobs:
           ${{ inputs.dotnet_version }}
           8.0.x
 
-    # Pin the active .NET SDK for the build in case it is older than the version needed by Xplor.AI.Metrics.BuildTool.
-    - name: Pin Active .NET SDK
-      run: |
-        set -euo pipefail
-
-        if [ -f ./global.json ]; then
-          echo "Repository global.json detected; honoring repository SDK pin."
-          cat ./global.json
-        else
-          REQUESTED="${{ inputs.dotnet_version }}"
-          # Enforce a minimum of .NET 8 for restore/build because repositories and tooling
-          # in this workflow can target net8.0 even when callers pass an older SDK input.
-          REQUESTED_MAJOR="${REQUESTED%%.*}"
-          if [ "$REQUESTED_MAJOR" -lt 8 ]; then
-            EFFECTIVE_REQUESTED="8.0.x"
-            echo "Requested SDK '$REQUESTED' is below minimum supported '8.0.x'; using '$EFFECTIVE_REQUESTED'."
-          else
-            EFFECTIVE_REQUESTED="$REQUESTED"
-          fi
-
-          PREFIX="${EFFECTIVE_REQUESTED%x}"
-          SELECTED=$(dotnet --list-sdks | awk -v p="$PREFIX" '$1 ~ ("^" p) {print $1}' | sort -V | tail -1)
-
-          if [ -z "$SELECTED" ]; then
-            echo "::error::Could not find an installed SDK matching '$EFFECTIVE_REQUESTED' (requested: '$REQUESTED')."
-            dotnet --list-sdks
-            exit 1
-          fi
-
-          printf '%s\n' \
-            '{' \
-            '  "sdk": {' \
-            "    \"version\": \"$SELECTED\"," \
-            '    "rollForward": "disable"' \
-            '  }' \
-            '}' > ./global.json
-
-          echo "Generated temporary global.json to pin SDK to $SELECTED"
-          cat ./global.json
-        fi
-
-        echo "dotnet --version => $(dotnet --version)"
-
     - name: Generate Xplor Pay Package Reader App Token
       id: package-reader-token
       uses: actions/create-github-app-token@v3
