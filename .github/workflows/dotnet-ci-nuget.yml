@@ -73,11 +73,11 @@ on:
 jobs:
   build:
 
-    runs-on: 
-      group: CHQ
-      labels: linux
+    #runs-on: 
+    #  group: CHQ
+    #  labels: linux
 
-    #runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
 
     timeout-minutes: 45
 
