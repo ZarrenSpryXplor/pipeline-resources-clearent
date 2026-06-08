@@ -28,7 +28,7 @@ runs:
   using: "composite"
 
   steps:
-    - name: Publish AI Metrics
+    - name: AI Metrics - Publish AI Metrics to Azure Storage
       continue-on-error: true
       shell: powershell
       run: |-

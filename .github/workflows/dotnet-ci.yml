@@ -87,7 +87,7 @@ jobs:
       uses: actions/checkout@v6
 
     - name: Setup Environment
-      uses: xplor-pay/github-actions/.github/actions/dotnet/environment@main
+      uses: xplor-pay/github-actions/.github/actions/dotnet/environment_setup@main
       with:
         dotnet_version: ${{ inputs.dotnet_version }}
 
@@ -160,11 +160,12 @@ jobs:
         echo "GitHub Packages auth preflight succeeded (HTTP $STATUS)."
 
     - name: Restore Repository Dependencies
-      uses: xplor-pay/github-actions/.github/actions/dotnet/run@main
+      uses: xplor-pay/github-actions/.github/actions/dotnet/run_dotnet@main
       env:
         # Keep these aliases aligned with caller nuget.config placeholders.
         GITHUB_USERNAME: ${{ secrets.XPLOR_PAY_PACKAGE_READ_USERNAME }}
         GITHUB_TOKEN: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT }}
+        GITHUB_ORG: ${{ github.repository_owner }}
       with:
         command: restore
         arguments: |
@@ -181,7 +182,7 @@ jobs:
 
     - name: Enforce .editorconfig Code Styles
       if: inputs.enforce_code_style == true
-      uses: xplor-pay/github-actions/.github/actions/dotnet/run@main
+      uses: xplor-pay/github-actions/.github/actions/dotnet/run_dotnet@main
       with:
         command: format
         arguments: |
@@ -190,7 +191,7 @@ jobs:
           --verify-no-changes
         
     - name: Build Repository
-      uses: xplor-pay/github-actions/.github/actions/dotnet/run@main
+      uses: xplor-pay/github-actions/.github/actions/dotnet/run_dotnet@main
       with:
         command: build
         arguments: |
@@ -199,7 +200,7 @@ jobs:
           --no-restore
 
     - name: Run Tests
-      uses: xplor-pay/github-actions/.github/actions/dotnet/run@main
+      uses: xplor-pay/github-actions/.github/actions/dotnet/run_dotnet@main
       with:
         command: test
         arguments: |
@@ -234,236 +235,32 @@ jobs:
         minimum_coverage_threshold: ${{ inputs.minimum_coverage_threshold }}
         artifact_retention_days: ${{ inputs.artifact_retention_days }}
 
-    - name: AI Metrics
+    - name: Install AI Metrics Tools
       if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-      
-
-#    - name: Resolve Code Coverage Threshold
-#      id: coverage-threshold
-#      uses: xplor-pay/github-actions/.github/actions/dotnet/coverage@main
-#      env:
-#        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#      run: |
-#        set -euo pipefail
-#
-#        DEFAULT_BRANCH=${{ github.event.repository.default_branch }}
-#        MINIMUM="${{ inputs.minimum_coverage_threshold }}"
-#        BASELINE=""
-#
-#        if gh run download --name coverage-baseline \
-#                          --branch "$DEFAULT_BRANCH" \
-#                          --repo "${{ github.repository }}" 2>/dev/null && [ -f coverage.txt ]; then
-#          BASELINE=$(cat coverage.txt)
-#        else
-#          BASELINE="${{ inputs.baseline_coverage_threshold }}"
-#          echo "$BASELINE" > coverage.txt
-#        fi
-#
-#        EFFECTIVE_THRESHOLD=$(awk "BEGIN { b=$BASELINE; m=$MINIMUM; if (b > m) printf \"%.2f\", b; else printf \"%.2f\", m }")
-#        # ReportGenerator expects an integer for lineCoverage.
-#        EFFECTIVE_THRESHOLD_INT=$(awk "BEGIN { t=$EFFECTIVE_THRESHOLD; if (t == int(t)) printf \"%d\", t; else printf \"%d\", int(t)+1 }")
-#
-#        echo "baseline_value=$BASELINE" >> $GITHUB_OUTPUT
-#        echo "effective_threshold=$EFFECTIVE_THRESHOLD_INT" >> $GITHUB_OUTPUT
-
-#    - name: Generate Code Coverage Report
-#      uses: danielpalme/ReportGenerator-GitHub-Action@5.5.7
-#      with:
-#        reports: '**/TestResults/**/coverage.cobertura.xml'
-#        targetdir: 'coveragereport'
-#        reporttypes: 'HtmlInline;MarkdownSummary'
-#        customSettings: 'minimumCoverageThresholds:lineCoverage=${{ steps.coverage-threshold.outputs.effective_threshold }}'
-#
-#    - name: Publish Code Coverage Summary to GitHub Action Summary
-#      run: cat coveragereport/Summary.md >> $GITHUB_STEP_SUMMARY
-#
-#    - name: Upload HTML Code Coverage Report Artifact
-#      uses: actions/upload-artifact@v7
-#      with:
-#        name: code-coverage-report-${{ inputs.dotnet_version }}
-#        path: coveragereport
-#        retention-days: ${{ inputs.artifact_retention_days }}
-
-    # Coverage regression is evaluated only for pull requests.
-#    - name: Compare Code Coverage Percentage to Threshold
-#      id: coverage-logic
-#      if: github.event_name == 'pull_request'
-#      run: |
-#        # 1. Extract new percentage from Cobertura XML for stable parsing.
-#        COVERAGE_FILE=$(find . -path "*/TestResults/*/coverage.cobertura.xml" | head -1)
-#        NEW_RATIO=$(grep -oPm1 '(?<=line-rate=")[0-9.]+' "$COVERAGE_FILE")
-#        NEW_PCT=$(awk "BEGIN { printf \"%.2f\", $NEW_RATIO * 100 }")
-#        echo "new_pct=$NEW_PCT" >> $GITHUB_OUTPUT
-#
-#        # 2. Use resolved baseline value from the threshold step.
-#        BASELINE="${{ steps.coverage-threshold.outputs.baseline_value }}"
-#        echo "baseline_pct=$BASELINE" >> $GITHUB_OUTPUT
-#
-#        # 3. Comparison
-#        if (( $(echo "$NEW_PCT < $BASELINE" | bc -l) )); then
-#          echo "status=fail" >> $GITHUB_OUTPUT
-#        else
-#          echo "status=pass" >> $GITHUB_OUTPUT
-#        fi
-#
-#    - name: Prepare or Update Baseline Code Coverage File
-#      if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-#      run: |
-#        # Build baseline from Cobertura XML on default-branch non-PR runs.
-#        COVERAGE_FILE=$(find . -path "*/TestResults/*/coverage.cobertura.xml" | head -1)
-#        BASELINE_RATIO=$(grep -oPm1 '(?<=line-rate=")[0-9.]+' "$COVERAGE_FILE")
-#        BASELINE_PCT=$(awk "BEGIN { printf \"%.2f\", $BASELINE_RATIO * 100 }")
-#        echo "$BASELINE_PCT" > coverage.txt
-#
-#    # PR comment formatting and posting are skipped for non-PR runs.
-#    - name: Read Code Coverage Summary for Pull Request Comment
-#      id: read-summary
-#      if: github.event_name == 'pull_request'
-#      run: |
-#        # Use a unique delimiter for the multi-line output
-#        EOF=$(dd if=/dev/urandom bs=15 count=1 2>/dev/null | base64)
-#        echo "summary<<$EOF" >> $GITHUB_OUTPUT
-#        cat coveragereport/Summary.md >> $GITHUB_OUTPUT
-#        echo "$EOF" >> $GITHUB_OUTPUT
-
-#    - name: Add Comment to Pull Request with the Code Coverage Summary
-#      uses: mshick/add-pr-comment@v3
-#      if: github.event_name == 'pull_request'
-#      with:
-#        message-id: coverage-report
-#        message: |
-#          ### 📊 Code Coverage Summary
-#          ${{ steps.read-summary.outputs.summary }}
-#            
-#          **Regression Check**: ${{ steps.coverage-logic.outputs.status == 'pass' && '✅ Passed' || '❌ Failed' }}
-#          * New: `${{ steps.coverage-logic.outputs.new_pct }}%` | Baseline: `${{ steps.coverage-logic.outputs.baseline_pct }}%`
-#            
-#          ---
-#          🔍 [View Run Summary](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-#        update-only: true
-#
-#    # Fail PR runs when regression check reports lower coverage than baseline.
-#    - name: Fail Pull Request Verifications if Code Coverage Does Not Meet Threshold
-#      if: github.event_name == 'pull_request' && steps.coverage-logic.outputs.status == 'fail'
-#      run: exit 1
-#
-#    # This step ensures that if we are on the default branch, we update the baseline for future PRs
-#    - name: Update Baseline Code Coverage Artifact
-#      if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-#      uses: actions/upload-artifact@v7
-#      with:
-#        name: coverage-baseline
-#        path: coverage.txt
-#        retention-days: ${{ inputs.artifact_retention_days }}
-
-    - name: AI Metrics - Install Xplor.AI.Metrics.BuildTool
       env:
         # Keep these aligned with caller nuget.config placeholders (%GITHUB_USERNAME%/%GITHUB_TOKEN%).
         GITHUB_USERNAME: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_USERNAME || 'x-access-token' }}
         GITHUB_TOKEN: ${{ secrets.XPLOR_PAY_PACKAGE_READ_PAT != '' && secrets.XPLOR_PAY_PACKAGE_READ_PAT || steps.package-reader-token.outputs.token }}
         GITHUB_ORG: ${{ github.repository_owner }}
         AI_METRICS_PACKAGE_VERSION: ${{ inputs.ai_metrics_package_version }}
-      run: |
-        dotnet tool install Xplor.AI.Metrics.BuildTool --version "$AI_METRICS_PACKAGE_VERSION" --tool-path "$TOOL_PATH" --configfile "./nuget.config" --create-manifest-if-needed --ignore-failed-sources 
+      uses: xplor-pay/github-actions/.github/actions/dotnet/ai_metrics_install@main
+      continue-on-error: true
 
-      #set -euo pipefail
-        #TOOL_PATH="${{ runner.temp }}/tools"
-        #TEMP_CONFIG="${{ runner.temp }}/nuget.tool.config"
-#
-        ## Use caller nuget.config (same behavior as local success path) and resolve placeholders
-        ## into concrete values for CI execution.
-        #if [ -f ./nuget.config ]; then
-        #  echo "copying nuget.config from repository"
-        #  cp ./nuget.config "$TEMP_CONFIG"
-        #else
-        #  echo "creating temporary nuget.config"
-        #  printf '%s\n' \
-        #    '<?xml version="1.0" encoding="utf-8"?>' \
-        #    '<configuration>' \
-        #    '  <packageSources>' \
-        #    '    <clear />' \
-        #    '    <add key="github" value="https://nuget.pkg.github.com/%GITHUB_ORG%/index.json" />' \
-        #    '    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />' \
-        #    '  </packageSources>' \
-        #    '  <packageSourceCredentials>' \
-        #    '    <github>' \
-        #    '      <add key="Username" value="%GITHUB_USERNAME%" />' \
-        #    '      <add key="ClearTextPassword" value="%GITHUB_TOKEN%" />' \
-        #    '    </github>' \
-        #    '  </packageSourceCredentials>' \
-        #    '</configuration>' \
-        #    > "$TEMP_CONFIG"
-        #fi
-#
-        #python3 -c "from pathlib import Path; import os; p=Path('$TEMP_CONFIG'); s=p.read_text(encoding='utf-8'); s=s.replace('%GITHUB_ORG%', os.environ['GITHUB_ORG']).replace('%GITHUB_USERNAME%', os.environ['GITHUB_USERNAME']).replace('%GITHUB_TOKEN%', os.environ['GITHUB_TOKEN']); p.write_text(s, encoding='utf-8')"
-#
-#
-        #echo "Installing Xplor.AI.Metrics.BuildTool version: $AI_METRICS_PACKAGE_VERSION"
-#
-        #PACKAGE_ID_LOWER="xplor.ai.metrics.buildtool"
-        #NUPKG_URL="https://nuget.pkg.github.com/$GITHUB_ORG/download/$PACKAGE_ID_LOWER/$AI_METRICS_PACKAGE_VERSION/$PACKAGE_ID_LOWER.$AI_METRICS_PACKAGE_VERSION.nupkg"
-        #NUPKG_PATH="${{ runner.temp }}/$PACKAGE_ID_LOWER.$AI_METRICS_PACKAGE_VERSION.nupkg"
-        #NORMALIZED_NUPKG_PATH="${{ runner.temp }}/$PACKAGE_ID_LOWER.$AI_METRICS_PACKAGE_VERSION.normalized.nupkg"
-        #LOCAL_SOURCE_DIR="${{ runner.temp }}/tool-package-source"
-#
-        #rm -rf "$LOCAL_SOURCE_DIR"
-        #mkdir -p "$LOCAL_SOURCE_DIR"
-#
-        ## Attempt 1: let dotnet resolve and download via NuGet protocol (uses registration/flatcontainer
-        ## endpoints rather than the raw /download URL, so auth behaves differently).
-        #echo "Attempting dotnet tool install via NuGet protocol..."
-        #if dotnet tool install Xplor.AI.Metrics.BuildTool \
-        #    --version "$AI_METRICS_PACKAGE_VERSION" \
-        #    --tool-path "$TOOL_PATH" \
-        #    --configfile "$TEMP_CONFIG"; then
-        #  echo "Tool installed successfully via NuGet protocol"
-        #  rm -f "$TEMP_CONFIG"
-        #  echo "$TOOL_PATH" >> "$GITHUB_PATH"
-        #  exit 0
-        #fi
-#
-        #echo "dotnet tool install via NuGet protocol failed; falling back to manual nupkg download"
-        #echo "nupkg_path: $NUPKG_PATH"
-        #echo "nupkg_url: $NUPKG_URL"
-#
-        #if ! curl -fLsS -H "Authorization: Bearer $GITHUB_TOKEN" -o "$NUPKG_PATH" "$NUPKG_URL"; then
-        #  echo "::error::Could not download package archive from $NUPKG_URL"
-        #  exit 1
-        #fi
-#
-        ## Diagnostic: print raw ZIP entry names exactly as stored in the nupkg.
-        ## This confirms whether DotnetToolSettings.xml is recorded with '\\' or '/'.
-        #python3 -c "import zipfile; p='$NUPKG_PATH'; z=zipfile.ZipFile(p,'r'); names=[i.filename for i in z.infolist()]; print('Raw nupkg entries (up to first 80):'); [print(f' - {n}') for n in names[:80]]; has_backslash=any('\\\\' in n for n in names); has_settings_posix='tools/net8.0/any/DotnetToolSettings.xml' in names; has_settings_windows='tools\\\\net8.0\\\\any\\\\DotnetToolSettings.xml' in names; print(f'ZIP path diagnostics: has_backslash={has_backslash}, has_settings_posix={has_settings_posix}, has_settings_windows={has_settings_windows}'); z.close()"
-#
-        ## Normalize backslash ZIP entry names for linux compatibility.
-        #python3 -c "import zipfile; src='$NUPKG_PATH'; dst='$NORMALIZED_NUPKG_PATH'; zin=zipfile.ZipFile(src,'r'); zout=zipfile.ZipFile(dst,'w',compression=zipfile.ZIP_DEFLATED); [zout.writestr(info.filename.replace('\\\\','/'), zin.read(info.filename)) for info in zin.infolist()]; zin.close(); zout.close()"
-#
-        #if ! unzip -l "$NORMALIZED_NUPKG_PATH" | grep -q "tools/net8.0/any/DotnetToolSettings.xml"; then
-        #  echo "::error::Normalized package is missing tools/net8.0/any/DotnetToolSettings.xml"
-        #  exit 1
-        #fi
-#
-        #cp "$NORMALIZED_NUPKG_PATH" "$LOCAL_SOURCE_DIR/$PACKAGE_ID_LOWER.$AI_METRICS_PACKAGE_VERSION.nupkg"
-        #dotnet tool install Xplor.AI.Metrics.BuildTool --version "$AI_METRICS_PACKAGE_VERSION" --tool-path "$TOOL_PATH" --add-source "$LOCAL_SOURCE_DIR" --ignore-failed-sources
-#
-        #rm -f "$TEMP_CONFIG"
-        #echo "$TOOL_PATH" >> $GITHUB_PATH
+    - name: Run AI Metrics Analysis
+      if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      uses: xplor-pay/github-actions/.github/actions/dotnet/ai_metrics_analyze@main
+      continue-on-error: true
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    - name: Publish AI Metrics Reports
+      if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      uses: xplor-pay/github-actions/.github/actions/dotnet/ai_metrics_publish@main
+      with:
+        sftp_server: ${{ secrets.XPLOR_PAY_AI_METRICS_SFTP_SERVER }}
+        ai_path: ${{ vars.XPLOR_PAY_AI_METRICS_AI_PATH}}
+        coverage_path: ${{ vars.XPLOR_PAY_AI_METRICS_COVERAGE_PATH }}
+        container_name: ${{ vars.XPLOR_PAY_AI_METRICS_CONTAINER_NAME }}
+        sas_key: ${{ secrets.XPLOR_PAY_AI_METRICS_SAS_KEY }}
+      continue-on-error: true
 
     - name: Pack NuGet Package(s)
       if: ${{ inputs.nuget_package == true && inputs.upload_artifact == true }}

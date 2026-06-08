@@ -1,0 +1,25 @@
+name: Run AI Metrics Analysis
+description: "Run AI Metrics analysis for .NET projects."
+
+#inputs:
+
+#outputs:
+
+runs:
+  using: "composite"
+
+  steps:
+
+    - name: Run Xplor AI Build Metrics Tool
+      shell: bash
+      run: |
+        echo "Run Xplor.AI.Metrics.BuildTool"
+        ls -lah
+        cd ${{ runner.workspace }}/tools
+        ./Xplor.AI.Metrics.BuildTool "${{ runner.workspace }}" -r xml
+        ls -lah
+        cp *.xml ${{ runner.workspace }}
+        cp ${{ runner.temp }}/**/coverage.cobertura.xml ${{ runner.workspace }}
+        cd ${{ runner.workspace }}
+        ls -lah
+        echo "Xplor.AI.Metrics.BuildTool tool completed successfully"
