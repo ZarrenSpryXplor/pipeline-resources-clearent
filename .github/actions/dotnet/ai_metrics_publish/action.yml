@@ -1,0 +1,112 @@
+name: Publish AI Metrics
+description: "Publish AI Metrics artifacts for PowerBI ingestion and reporting."
+
+inputs:
+  sftp_server: 
+    description: 'The SFTP server to which AI Metrics will be published.'
+    required: true
+
+  ai_path:
+    description: 'The path within the container where AI Metrics will be published.'
+    required: true
+
+  coverage_path:
+    description: 'The path within the container where code coverage files will be published.'
+    required: true
+
+  container_name:
+    description: 'The name of the container where AI Metrics will be published.'
+    required: true
+
+  sas_key:
+    description: 'The SAS key for authenticating to the storage account when publishing AI Metrics.'
+    required: true
+
+#outputs:
+
+runs:
+  using: "composite"
+
+  steps:
+    - name: Publish AI Metrics
+      continue-on-error: true
+      shell: powershell
+      run: |-
+        $computer = '${{ inputs.sftp_server }}'
+        $aiPath = '${{ inputs.ai_path }}'
+        $coveragePath = '${{ inputs.coverage_path }}'
+        $containerName = '${{ inputs.container_name }}'
+        $sasKey = '${{ inputs.sas_key }}'
+
+        $datetime = (Get-Date).ToString('yyyyMMdd_HHmmss')
+
+        Write-Host "Current directory: $(Get-Location)"
+        Set-Location -Path '${{ runner.workspace }}'
+        Write-Host "Changed directory: $(Get-Location)"
+
+        # Create temporary directory for file copies
+        $tempDir = Join-Path "${{ runner.temp }}" "azcopy_upload_$datetime"
+        New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+        Write-Host "Created temporary directory: $tempDir"
+
+        $slnFile = Get-ChildItem -Path '.' -Recurse -Filter "*.sln"
+        $fileNm = [System.IO.Path]::GetFileNameWithoutExtension($slnFile.FullName)
+
+        $coverageFiles = Get-ChildItem -Path '.' -Recurse -Include "*.cobertura.xml"
+        #-Filter "*.cobertura.xml|*.coverage"
+
+        $files = Get-ChildItem -Path . -Filter "${fileNm}*.xml" -File
+
+        Write-Host "AI Metrics local files found: $files"
+
+        $azcopyPath = "${{ runner.workspace }}/tools/azcopy"
+
+        try {
+
+            foreach($file in $files){
+                $fileName = Split-Path -Path $file -Leaf
+                $tempFilePath = Join-Path $tempDir $fileName
+
+                # Copy to temp location first
+                Copy-Item -Path $file.FullName -Destination $tempFilePath -Force
+                Write-Host "Copied $file to temp location: $tempFilePath"
+
+                Write-Host "Uploading $tempFilePath to https://$computer/$containerName/$aiPath/$fileName"
+
+                . "$azcopyPath" cp "$tempFilePath" "https://$computer/$containerName/$aiPath/$fileName`?$sasKey" --overwrite=true --log-level DEBUG
+            }
+
+            $iterator = 1;
+            foreach($file in $coverageFiles){
+                $remoteNm = "${fileNm}_${datetime}_${iterator}.cobertura.xml"
+                $tempFilePath = Join-Path $tempDir $remoteNm
+
+                # Copy to temp location first
+                Copy-Item -Path $file.FullName -Destination $tempFilePath -Force
+                Write-Host "Copied $file to temp location: $tempFilePath"
+
+                $fileName = Split-Path -Path $file -Leaf
+                Write-Host "Rename $coveragePath$fileName to $remoteNm"
+
+                . "$azcopyPath" cp "$tempFilePath" "https://$computer/$containerName/$coveragePath/$remoteNm`?$sasKey" --overwrite=true --log-level DEBUG
+                $iterator++;
+            }
+        }
+        catch {
+            Write-Host $_.exception.Message
+        }
+        finally {
+            # Clean up temporary directory
+            if (Test-Path $tempDir) {
+                Remove-Item -Path $tempDir -Recurse -Force
+                Write-Host "Cleaned up temporary directory: $tempDir"
+            }
+        }
+        exit 0
+    
+    - name: Publish azcopy logs as build artifacts
+      continue-on-error: true
+      uses: actions/upload-artifact@v4.1.0
+      with:
+        name: AzCopyLogs
+        path: ${{ runner.workspace }}/.azcopy
