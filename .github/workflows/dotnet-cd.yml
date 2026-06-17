@@ -95,8 +95,10 @@ jobs:
     permissions:
       contents: read
       actions: read
+      id-token: write
+      attestations: write
       pull-requests: write
-      packages: read
+      packages: write
 
     env:
       NUGET_PLUGIN_HANDSHAKE_TIMEOUT_IN_SECONDS: ${{ vars.NUGET_PLUGIN_HANDSHAKE_TIMEOUT_IN_SECONDS || '20' }}
