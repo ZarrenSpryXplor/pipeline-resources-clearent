@@ -70,6 +70,18 @@ on:
         type: boolean
         default: true
 
+      image_name:
+        description: 'Optional Docker image name override (repository name only, no registry).'
+        required: false
+        type: string
+        default: ''
+
+      image_tag:
+        description: 'Optional canonical Docker tag to publish in addition to metadata-generated tags.'
+        required: false
+        type: string
+        default: ''
+
 jobs:
   containerize:
     name: Build and Push Docker Image
@@ -90,7 +102,7 @@ jobs:
       NUGET_PLUGIN_HANDSHAKE_TIMEOUT_IN_SECONDS: ${{ vars.NUGET_PLUGIN_HANDSHAKE_TIMEOUT_IN_SECONDS || '20' }}
       NUGET_PLUGIN_REQUEST_TIMEOUT_IN_SECONDS: ${{ vars.NUGET_PLUGIN_REQUEST_TIMEOUT_IN_SECONDS || '20' }}
       REGISTRY: ghcr.io/xplor-pay
-      IMAGE_NAME: ${{ github.event.repository.name }}
+      IMAGE_NAME: ${{ inputs.image_name || github.event.repository.name }}
 
     steps:
     - name: Checkout Repository
@@ -130,6 +142,30 @@ jobs:
           type=semver,pattern={{version}}
           type=sha,format=short
 
+    - name: Compose Docker tags
+      id: compose-tags
+      shell: bash
+      run: |
+        IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+        CANONICAL_TAG="${{ inputs.image_tag }}"
+
+        {
+          echo "tags<<EOF"
+          if [ -n "$CANONICAL_TAG" ]; then
+            echo "${IMAGE}:${CANONICAL_TAG}"
+          fi
+          echo "${{ steps.meta.outputs.tags }}"
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Debug resolved Docker tags
+      shell: bash
+      run: |
+        echo "Resolved image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+        echo "Canonical input tag: ${{ inputs.image_tag }}"
+        echo "Final tags to push:"
+        echo "${{ steps.compose-tags.outputs.tags }}"
+
     - name: Build and Push Docker Image
       id: build-and-push
       uses: docker/build-push-action@v3
@@ -137,12 +173,13 @@ jobs:
         context: .
         file: ${{ steps.find-dockerfile.outputs.dockerfile_path }}
         push: true
-        tags: ${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ needs.setup.outputs.dotnet_version }}-${{ needs.setup.outputs.version }}
+        tags: ${{ steps.compose-tags.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
 
     - name: Generate artifact attestation
       uses: actions/attest-build-provenance@v1
       with:
-        subject-name: ${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ needs.setup.outputs.dotnet_version }}-${{ needs.setup.outputs.version }}
+        subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         subject-digest: ${{ steps.build-and-push.outputs.digest }}
         push-to-registry: true
 
