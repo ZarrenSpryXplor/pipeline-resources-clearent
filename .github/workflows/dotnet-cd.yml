@@ -102,7 +102,6 @@ jobs:
       NUGET_PLUGIN_HANDSHAKE_TIMEOUT_IN_SECONDS: ${{ vars.NUGET_PLUGIN_HANDSHAKE_TIMEOUT_IN_SECONDS || '20' }}
       NUGET_PLUGIN_REQUEST_TIMEOUT_IN_SECONDS: ${{ vars.NUGET_PLUGIN_REQUEST_TIMEOUT_IN_SECONDS || '20' }}
       REGISTRY: ghcr.io/xplor-pay
-      IMAGE_NAME: ${{ inputs.image_name || github.event.repository.name }}
 
     steps:
     - name: Checkout Repository
@@ -139,6 +138,30 @@ jobs:
         echo "dockerfile_path=$DOCKERFILE_PATH" >> "$GITHUB_OUTPUT"
         echo "Dockerfile location: $DOCKERFILE_PATH"
 
+    - name: Resolve Docker image name
+      id: resolve-image
+      shell: bash
+      run: |
+        RAW_IMAGE_NAME="${{ inputs.image_name }}"
+
+        if [ -z "$RAW_IMAGE_NAME" ]; then
+          RAW_IMAGE_NAME="${{ github.event.repository.name }}"
+        fi
+
+        # GHCR image path segments must be lowercase.
+        RAW_IMAGE_NAME="${RAW_IMAGE_NAME,,}"
+
+        # Accept caller values like ghcr.io/org/repo, org/repo, or repo.
+        RAW_IMAGE_NAME="${RAW_IMAGE_NAME#ghcr.io/}"
+
+        OWNER_PREFIX="${{ github.repository_owner }}/"
+        OWNER_PREFIX="${OWNER_PREFIX,,}"
+        if [[ "$RAW_IMAGE_NAME" == "$OWNER_PREFIX"* ]]; then
+          RAW_IMAGE_NAME="${RAW_IMAGE_NAME#${OWNER_PREFIX}}"
+        fi
+
+        echo "image_name=$RAW_IMAGE_NAME" >> "$GITHUB_OUTPUT"
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v4
       
@@ -146,7 +169,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        images: ${{ env.REGISTRY }}/${{ steps.resolve-image.outputs.image_name }}
         tags: |
           type=ref,event=branch
           type=ref,event=pr
@@ -157,7 +180,7 @@ jobs:
       id: compose-tags
       shell: bash
       run: |
-        IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+        IMAGE="${{ env.REGISTRY }}/${{ steps.resolve-image.outputs.image_name }}"
         CANONICAL_TAG="${{ inputs.image_tag }}"
 
         {
@@ -172,7 +195,7 @@ jobs:
     - name: Debug resolved Docker tags
       shell: bash
       run: |
-        echo "Resolved image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+        echo "Resolved image: ${{ env.REGISTRY }}/${{ steps.resolve-image.outputs.image_name }}"
         echo "Canonical input tag: ${{ inputs.image_tag }}"
         echo "Final tags to push:"
         echo "${{ steps.compose-tags.outputs.tags }}"
@@ -192,7 +215,7 @@ jobs:
     - name: Generate artifact attestation
       uses: actions/attest-build-provenance@v1
       with:
-        subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        subject-name: ${{ env.REGISTRY }}/${{ steps.resolve-image.outputs.image_name }}
         subject-digest: ${{ steps.build-and-push.outputs.digest }}
         push-to-registry: true
 
