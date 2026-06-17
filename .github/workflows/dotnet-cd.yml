@@ -122,7 +122,7 @@ jobs:
       uses: docker/login-action@v2
       with:
         registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
+        username: ${{ secrets.PACKAGE_WRITER_PAT_TOKEN != '' && secrets.PACKAGE_WRITER_PAT_USERNAME || 'x-access-token' }}
         password: ${{ secrets.PACKAGE_WRITER_PAT_TOKEN != '' && secrets.PACKAGE_WRITER_PAT_TOKEN || steps.package-writer-token-docker.outputs.token != '' && steps.package-writer-token-docker.outputs.token || secrets.GITHUB_TOKEN }}
 
     - name: Report GHCR auth mode
@@ -130,6 +130,9 @@ jobs:
       run: |
         if [ -n "${{ secrets.PACKAGE_WRITER_PAT_TOKEN }}" ]; then
           echo "Using package writer PAT for GHCR push authentication."
+          if [ -z "${{ secrets.PACKAGE_WRITER_PAT_USERNAME }}" ]; then
+            echo "::warning::PACKAGE_WRITER_PAT_USERNAME is not set. Set it to the PAT owner's GitHub username."
+          fi
         elif [ -n "${{ steps.package-writer-token-docker.outputs.token }}" ]; then
           echo "Using package writer GitHub App token for GHCR push authentication."
         else
