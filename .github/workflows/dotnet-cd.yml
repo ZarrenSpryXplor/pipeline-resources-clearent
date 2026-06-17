@@ -115,6 +115,17 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Generate Xplor Pay Package Reader App Token (for Docker build)
+      id: package-reader-token-docker
+      uses: actions/create-github-app-token@v3
+      with:
+        client-id: ${{ secrets.PACKAGE_READER_APP_CLIENT_ID }}
+        private-key: ${{ secrets.PACKAGE_READER_APP_PRIVATE_KEY }}
+        owner: ${{ github.repository_owner }}
+        repositories: |
+          ${{ github.event.repository.name }}
+          ${{ inputs.ai_metrics_package_repository }}
+
     - name: Find Dockerfile path
       id: find-dockerfile
       shell: bash
@@ -175,6 +186,8 @@ jobs:
         push: true
         tags: ${{ steps.compose-tags.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
+        secrets: |
+          github_token=${{ secrets.PACKAGE_READER_PAT_TOKEN != '' && secrets.PACKAGE_READER_PAT_TOKEN || steps.package-reader-token-docker.outputs.token }}
 
     - name: Generate artifact attestation
       uses: actions/attest-build-provenance@v1
