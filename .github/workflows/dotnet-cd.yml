@@ -109,8 +109,8 @@ jobs:
 
     - name: Generate Xplor Pay Package Writer App Token (for GHCR push)
       id: package-writer-token-docker
-      if: ${{ secrets.PACKAGE_WRITER_APP_CLIENT_ID != '' && secrets.PACKAGE_WRITER_APP_PRIVATE_KEY != '' }}
       uses: actions/create-github-app-token@v3
+      continue-on-error: true
       with:
         client-id: ${{ secrets.PACKAGE_WRITER_APP_CLIENT_ID }}
         private-key: ${{ secrets.PACKAGE_WRITER_APP_PRIVATE_KEY }}
