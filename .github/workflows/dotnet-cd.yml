@@ -85,9 +85,9 @@ on:
 jobs:
   containerize:
     name: Build and Push Docker Image
-    runs-on: ubuntu-latest
-#      group: CHQ
-#      labels: linux
+    runs-on: 
+      group: CHQ
+      labels: linux
     #runs-on: ubuntu-latest
 
     timeout-minutes: 45
