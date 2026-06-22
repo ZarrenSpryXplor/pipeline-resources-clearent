@@ -28,7 +28,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v7
         with:
-          repository: ${{ github.repository_owner}}/${{ inputs.repository }}
+          repository: ${{ inputs.repository }}
 
       - name: Get .NET Version(s) from TargetFramework(s)
         id: get-versions
