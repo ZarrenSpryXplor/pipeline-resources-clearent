@@ -1,4 +1,4 @@
-name: Continuous Integration
+name: Pull Request Governance
 
 on:
   workflow_call:
@@ -82,7 +82,7 @@ jobs:
 
       # At time of writing (20260622),
       # GitHub Packages does not support tokens from GitHub Apps.
-      # It will give a "scope does not include" type of error.
+      # It will give a "scope does not include" error message.
       - name: Verify nuget.config Exists at Repository Root
         continue-on-error: true
         run: |
