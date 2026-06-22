@@ -3,11 +3,11 @@ name: Pull Request Governance
 on:
   workflow_call:
     inputs:
-      dotnet_version:
-        description: 'The .NET SDK version to use for the build and test steps.'
-        required: true
-        type: string
-        default: '8.0.x'
+#      dotnet_version:
+#        description: 'The .NET SDK version to use for the build and test steps.'
+#        required: true
+#        type: string
+#        default: '8.0.x'
 
       baseline_coverage_threshold:
         description: 'Baseline coverage percentage threshold for pull requests to use when no baseline is defined in the coverage.txt in the main branch.'
