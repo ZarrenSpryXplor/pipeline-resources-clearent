@@ -93,6 +93,8 @@ jobs:
             exit 1
           fi
 
+          echo "nuget.config exists at repository root."
+
       - name: List NuGet Sources from nuget.config
         continue-on-error: true
         run: |
