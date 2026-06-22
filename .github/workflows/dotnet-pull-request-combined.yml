@@ -37,12 +37,6 @@ on:
         type: string
         default: '7'
 
-      ai_metrics_package_repository:
-        description: 'Repository that owns the Xplor.AI.Metrics.BuildTool package.'
-        required: false
-        type: string
-        default: 'Xplor.AI.Metrics.BuildTool'
-
       enforce_code_style:
         description: 'Toggle to indicate whether code style enforcement should be applied.'
         required: false
