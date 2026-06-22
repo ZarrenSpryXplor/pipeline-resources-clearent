@@ -70,6 +70,7 @@ runs:
         targetdir: 'coveragereport'
         reporttypes: 'HtmlInline;MarkdownSummary'
         customSettings: 'minimumCoverageThresholds:lineCoverage=${{ steps.coverage-threshold.outputs.effective_threshold }}'
+        title: 'Code Coverage Summary'
 
     - name: Coverage Report - End
       if: ${{ always() }}
