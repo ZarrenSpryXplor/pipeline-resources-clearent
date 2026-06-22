@@ -8,6 +8,10 @@ on:
         required: true
         type: string
 
+    outputs:
+      matrix:
+        description: 'The matrix of .NET versions extracted from the target frameworks.'
+        value: ${{ jobs.setup.outputs.matrix }}
 jobs:
   setup:
     runs-on: ubuntu-latest
