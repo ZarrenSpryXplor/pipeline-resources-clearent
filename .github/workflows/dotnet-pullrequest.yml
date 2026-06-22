@@ -90,12 +90,12 @@ jobs:
 
       - name: Verify Authentication to GitHub Packages
         env:
-          GITHUB_USERNAME: ${{ secrets.PACKAGE_READER_PAT_TOKEN != '' && secrets.PACKAGE_READER_PAT_USERNAME || 'x-access-token' }}
-          GITHUB_TOKEN: ${{ secrets.PACKAGE_READER_PAT_TOKEN != '' && secrets.PACKAGE_READER_PAT_TOKEN || steps.package-reader-token.outputs.token }}
-          USE_PAT_AUTH: 'true'
-          #GITHUB_USERNAME: 'x-access-token'
-          #GITHUB_TOKEN: ${{ steps.package-reader-token.outputs.token }}
-          #USE_PAT_AUTH: 'false'
+          #GITHUB_USERNAME: ${{ secrets.PACKAGE_READER_PAT_TOKEN != '' && secrets.PACKAGE_READER_PAT_USERNAME || 'x-access-token' }}
+          #GITHUB_TOKEN: ${{ secrets.PACKAGE_READER_PAT_TOKEN != '' && secrets.PACKAGE_READER_PAT_TOKEN || steps.package-reader-token.outputs.token }}
+          #USE_PAT_AUTH: 'true'
+          GITHUB_USERNAME: 'x-access-token'
+          GITHUB_TOKEN: ${{ steps.package-reader-token.outputs.token }}
+          USE_PAT_AUTH: 'false'
           GITHUB_ORG: ${{ github.repository_owner }}
           AI_METRICS_REPOSITORY: ${{ inputs.ai_metrics_package_repository }}
         run: |
