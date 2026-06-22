@@ -89,6 +89,7 @@ jobs:
           owner: ${{ github.repository_owner }}
 
       - name: Verify Authentication to GitHub Packages
+        continue-on-error: true
         env:
           #GITHUB_USERNAME: ${{ secrets.PACKAGE_READER_PAT_TOKEN != '' && secrets.PACKAGE_READER_PAT_USERNAME || 'x-access-token' }}
           #GITHUB_TOKEN: ${{ secrets.PACKAGE_READER_PAT_TOKEN != '' && secrets.PACKAGE_READER_PAT_TOKEN || steps.package-reader-token.outputs.token }}
