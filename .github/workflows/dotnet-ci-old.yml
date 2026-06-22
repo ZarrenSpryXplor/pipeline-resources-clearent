@@ -1,0 +1,380 @@
+# This workflow will build a .NET project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
+
+name: .NET Continuous Integration
+
+on:
+  workflow_call:
+    inputs:
+      dotnet_version:
+        description: 'The .NET SDK version to use for the build and test steps.'
+        required: true
+        type: string
+        default: '8.0.x'
+
+      baseline_coverage_threshold:
+        description: 'Baseline coverage percentage threshold for pull requests to use when no baseline is defined in the coverage.txt in the main branch.'
+        required: false
+        type: string
+        default: '0'
+
+      minimum_coverage_threshold:
+        description: 'Minimum overall line coverage threshold, enforced by ReportGenerator.'
+        required: false
+        type: string
+        default: '80'
+
+      base_ref:
+        description: 'Base branch for comparison in pull requests'
+        type: string
+        required: false
+        
+      head_ref:
+        description: 'Head branch containing changes for pull requests'
+        type: string
+        required: false
+
+      nuget_package:
+        description: 'Toggle to indicate whether a NuGet package should be created if this is a NuGet repo'
+        required: false
+        type: boolean
+        default: false
+
+      upload_artifact:
+        description: 'Toggle to upload build artifacts (not necessary for pull request runs)'
+        required: true
+        type: boolean
+        default: false
+
+      artifact_retention_days:
+        description: 'Number of days to retain workflow artifacts.'
+        required: false
+        type: string
+        default: '7'
+
+      ai_metrics_package_repository:
+        description: 'Repository that owns the Xplor.AI.Metrics.BuildTool package.'
+        required: false
+        type: string
+        default: 'Xplor.AI.Metrics.BuildTool'
+
+      ai_metrics_package_version:
+        description: 'Version of Xplor.AI.Metrics.BuildTool to install.'
+        required: false
+        type: string
+        default: '1.0.2'
+
+      enforce_code_style:
+        description: 'Toggle to indicate whether code style enforcement should be applied.'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  build:
+
+    runs-on: 
+      group: CHQ
+      labels: linux
+
+    #runs-on: ubuntu-latest
+
+    timeout-minutes: 45
+
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+      packages: read
+
+    env:
+      NUGET_PLUGIN_HANDSHAKE_TIMEOUT_IN_SECONDS: ${{ vars.NUGET_PLUGIN_HANDSHAKE_TIMEOUT_IN_SECONDS || '20' }}
+      NUGET_PLUGIN_REQUEST_TIMEOUT_IN_SECONDS: ${{ vars.NUGET_PLUGIN_REQUEST_TIMEOUT_IN_SECONDS || '20' }}
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v6
+
+    - name: Setup Environment
+      uses: xplor-pay/github-actions/.github/actions/dotnet/environment_setup@main
+      env:
+        DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
+      with:
+        dotnet_version: ${{ inputs.dotnet_version }}
+
+    - name: Generate Xplor Pay Package Reader App Token
+      id: package-reader-token
+      uses: actions/create-github-app-token@v3
+      with:
+        client-id: ${{ secrets.PACKAGE_READER_APP_CLIENT_ID }}
+        private-key: ${{ secrets.PACKAGE_READER_APP_PRIVATE_KEY }}
+        owner: ${{ github.repository_owner }}
+        repositories: |
+          ${{ github.event.repository.name }}
+          ${{ inputs.ai_metrics_package_repository }}
+
+    - name: Verify Authentication to GitHub Packages
+      env:
+        GITHUB_USERNAME: ${{ secrets.PACKAGE_READER_PAT_TOKEN != '' && secrets.PACKAGE_READER_PAT_USERNAME || 'x-access-token' }}
+        GITHUB_TOKEN: ${{ secrets.PACKAGE_READER_PAT_TOKEN != '' && secrets.PACKAGE_READER_PAT_TOKEN || steps.package-reader-token.outputs.token }}
+        USE_PAT_AUTH: 'true'
+        #GITHUB_USERNAME: 'x-access-token'
+        #GITHUB_TOKEN: ${{ steps.package-reader-token.outputs.token }}
+        #USE_PAT_AUTH: 'false'
+
+        GITHUB_ORG: ${{ github.repository_owner }}
+        AI_METRICS_REPOSITORY: ${{ inputs.ai_metrics_package_repository }}
+      run: |
+        set -euo pipefail
+        dotnet --list-sdks
+        if [ -n "${{ secrets.PACKAGE_READER_PAT_TOKEN }}" ]; then
+          echo "Using PAT-based package read authentication."
+        else
+          echo "Using GitHub App installation token for package read authentication."
+        fi
+
+        if [ ! -f ./nuget.config ]; then
+          echo "::error::nuget.config was not found at repository root."
+          exit 1
+        fi
+
+        echo "Configured NuGet sources from ./nuget.config:"
+        dotnet nuget list source --configfile ./nuget.config
+
+        FEED_URL="https://nuget.pkg.github.com/xplor-pay/index.json"
+        STATUS=$(curl -sS -o /dev/null -w "%{http_code}" -u "$GITHUB_USERNAME:$GITHUB_TOKEN" "$FEED_URL")
+
+        if [ "$STATUS" != "200" ]; then
+          echo "::error::GitHub Packages auth preflight failed (HTTP $STATUS) for $FEED_URL. Verify caller permissions and package access settings."
+          exit 1
+        fi
+
+        if [ "$USE_PAT_AUTH" = "true" ]; then
+          echo "Skipping installation scope check for PAT auth mode."
+        else
+          INSTALL_REPOS_JSON="$(mktemp)"
+          INSTALL_REPOS_STATUS=$(curl -sS -o "$INSTALL_REPOS_JSON" -w "%{http_code}" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/installation/repositories")
+
+          if [ "$INSTALL_REPOS_STATUS" = "200" ]; then
+            if ! python3 -c "import json,sys; d=json.load(open('$INSTALL_REPOS_JSON')); target='$GITHUB_ORG/$AI_METRICS_REPOSITORY'.lower(); names={r.get('full_name','').lower() for r in d.get('repositories',[])}; ok=target in names; print(f'Installation token scope includes {target}.' if ok else f'::error::GitHub App token installation scope does not include {target}. Update app installation repository access or token scoping.'); sys.exit(0 if ok else 1)"
+            then
+              exit 1
+            fi
+          else
+            echo "::warning::Could not verify installation repository scope via GitHub API (HTTP $INSTALL_REPOS_STATUS)."
+          fi
+        fi
+
+        echo "GitHub Packages auth preflight succeeded (HTTP $STATUS)."
+
+    - name: Restore Repository Dependencies
+      uses: xplor-pay/github-actions/.github/actions/dotnet/run_dotnet@main
+      env:
+        # Keep these aliases aligned with caller nuget.config placeholders.
+        GITHUB_USERNAME: ${{ secrets.PACKAGE_READER_PAT_USERNAME }}
+        GITHUB_TOKEN: ${{ secrets.PACKAGE_READER_PAT_TOKEN }}
+        GITHUB_ORG: ${{ github.repository_owner }}
+      with:
+        command: restore
+        arguments: |
+          --configfile
+          ./nuget.config
+
+    - name: Review Repository Dependencies for Vulnerabilities
+      if: github.event_name == 'pull_request'
+      uses: actions/dependency-review-action@v5
+      with:
+        comment-summary-in-pr: always
+        base-ref: ${{ inputs.base_ref }}
+        head-ref: ${{ inputs.head_ref }}
+
+    - name: Enforce .editorconfig Code Styles
+      if: inputs.enforce_code_style == true
+      uses: xplor-pay/github-actions/.github/actions/dotnet/run_dotnet@main
+      with:
+        command: format
+        arguments: |
+          --verbosity
+          detailed
+          --verify-no-changes
+        
+    - name: Build Repository
+      uses: xplor-pay/github-actions/.github/actions/dotnet/run_dotnet@main
+      with:
+        command: build
+        arguments: |
+          --configuration
+          Release
+          --no-restore
+
+    - name: Run Tests
+      uses: xplor-pay/github-actions/.github/actions/dotnet/run_dotnet@main
+      with:
+        command: test
+        arguments: |
+          --configuration
+          Release
+          --no-build
+          --no-restore
+          --verbosity
+          normal
+          --filter:TestCategory!~Integration&Category!~Integration
+          --collect:XPlat Code Coverage;Format=opencover,cobertura
+          --results-directory
+          ./TestResults
+          --
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SkipAutoProps=true
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude=[*Tests*]*
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeAssembliesWithoutSources=MissingAll
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SingleHit=false
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.IncludeTestAssembly=false
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.UseSourceLink=false
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.DeterministicReport=false
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByAttribute=Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute
+
+    - name: Code Coverage Analysis, Enforcement, and Reporting
+      id: coverage-threshold
+      uses: xplor-pay/github-actions/.github/actions/dotnet/coverage@main 
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        dotnet_version: ${{ inputs.dotnet_version }}
+        baseline_coverage_threshold: ${{ inputs.baseline_coverage_threshold }}
+        minimum_coverage_threshold: ${{ inputs.minimum_coverage_threshold }}
+        artifact_retention_days: ${{ inputs.artifact_retention_days }}
+
+    - name: Install AI Metrics Tools
+      if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      env:
+        # Keep these aligned with caller nuget.config placeholders (%GITHUB_USERNAME%/%GITHUB_TOKEN%).
+        GITHUB_USERNAME: ${{ secrets.PACKAGE_READER_PAT_TOKEN != '' && secrets.PACKAGE_READER_PAT_USERNAME || 'x-access-token' }}
+        GITHUB_TOKEN: ${{ secrets.PACKAGE_READER_PAT_TOKEN != '' && secrets.PACKAGE_READER_PAT_TOKEN || steps.package-reader-token.outputs.token }}
+        GITHUB_ORG: ${{ github.repository_owner }}
+        AI_METRICS_PACKAGE_VERSION: ${{ inputs.ai_metrics_package_version }}
+      uses: xplor-pay/github-actions/.github/actions/dotnet/ai_metrics_install@main
+      continue-on-error: true
+
+    - name: Run AI Metrics Analysis
+      if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      uses: xplor-pay/github-actions/.github/actions/dotnet/ai_metrics_analyze@main
+      continue-on-error: true
+
+    - name: Publish AI Metrics Reports
+      if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      uses: xplor-pay/github-actions/.github/actions/dotnet/ai_metrics_publish@main
+      with:
+        sftp_server: ${{ secrets.AI_METRICS_SFTP_SERVER }}
+        ai_path: ${{ vars.AI_METRICS_AI_PATH}}
+        coverage_path: ${{ vars.AI_METRICS_COVERAGE_PATH }}
+        container_name: ${{ vars.AI_METRICS_CONTAINER_NAME }}
+        sas_key: ${{ secrets.AI_METRICS_SAS_KEY }}
+      continue-on-error: true
+
+    - name: Pack NuGet Package(s)
+      if: ${{ inputs.nuget_package == true && inputs.upload_artifact == true }}
+      run: |
+          # Count .sln files in the root directory
+          SLN_COUNT=$(find . -maxdepth 1 -name "*.sln" | wc -l)
+
+          if [ "$SLN_COUNT" -gt 0 ]; then
+            echo "✅ Found Solution file(s) in root. Packing solution..."
+            dotnet pack --configuration Release --no-build --output ./dist
+          else
+            echo "⚠️ No .sln found in root. Packing eligible .csproj files recursively..."
+            find . \( -path "./test" -o -path "./test/*" -o -path "./sample" -o -path "./sample/*" \) -prune -o -name "*.csproj" ! -name "*Tests*.csproj" ! -name "*Sample*.csproj" -exec dotnet pack --configuration Release --no-build --output ./dist {} +
+          fi
+
+    - name: Upload NuGet Package(s) to Actions Artifact Storage for Publish to GitHub Packages
+      if: ${{ inputs.nuget_package == true && inputs.upload_artifact == true }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: nuget-dist
+        path: ./dist
+        retention-days: ${{ inputs.artifact_retention_days }}
+
+  publish:
+    name: Publish NuGet Package(s) to GitHub Packages
+    if: ${{ inputs.nuget_package == true && inputs.upload_artifact == true }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v6
+
+    - name: Setup .NET Environment
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: ${{ inputs.dotnet_version }}
+
+    - name: Generate Xplor Pay Package Writer App Token
+      id: package-writer-token
+      uses: actions/create-github-app-token@v3
+      with:
+        client-id: ${{ secrets.PACKAGE_WRITER_APP_CLIENT_ID }}
+        private-key: ${{ secrets.PACKAGE_WRITER_APP_PRIVATE_KEY }}
+        owner: ${{ github.repository_owner }}
+
+    - name: Download NuGet Package(s) from Actions Artifact Storage for Publish to GitHub Packages
+      uses: actions/download-artifact@v7
+      with:
+        name: nuget-dist
+        path: ./dist
+
+    - name: Publish NuGet Package(s)to GitHub Packages
+      env:
+          GITHUB_USERNAME: x-access-token
+          GITHUB_TOKEN: ${{ steps.package-writer-token.outputs.token }}
+          GITHUB_ORG: ${{ github.repository_owner }}
+      run: |
+          set -euo pipefail
+
+          CONFIG_FILE="./nuget.config"
+          TEMP_CONFIG="$RUNNER_TEMP/nuget.publish.config"
+
+          cleanup() {
+            rm -f "$TEMP_CONFIG"
+          }
+          trap cleanup EXIT
+
+          if [ -f "$CONFIG_FILE" ]; then
+            cp "$CONFIG_FILE" "$TEMP_CONFIG"
+          else
+            printf '%s\n' \
+              '<?xml version="1.0" encoding="utf-8"?>' \
+              '<configuration>' \
+              '  <packageSources>' \
+              '    <clear />' \
+              '    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />' \
+              '  </packageSources>' \
+              '</configuration>' > "$TEMP_CONFIG"
+          fi
+
+          if dotnet nuget list source --configfile "$TEMP_CONFIG" | grep -qi "github"; then
+            dotnet nuget update source github \
+              --source "https://nuget.pkg.github.com/$GITHUB_ORG/index.json" \
+              --username "$GITHUB_USERNAME" \
+              --password "$GITHUB_TOKEN" \
+              --store-password-in-clear-text \
+              --configfile "$TEMP_CONFIG"
+          else
+            dotnet nuget add source "https://nuget.pkg.github.com/$GITHUB_ORG/index.json" \
+              --name github \
+              --username "$GITHUB_USERNAME" \
+              --password "$GITHUB_TOKEN" \
+              --store-password-in-clear-text \
+              --configfile "$TEMP_CONFIG"
+          fi
+
+          echo "Publishing NuGet packages to GitHub Packages..."
+          for nupkg in ./dist/*.nupkg; do
+            dotnet nuget push "$nupkg" --source "github" --skip-duplicate --configfile "$TEMP_CONFIG"
+          done
