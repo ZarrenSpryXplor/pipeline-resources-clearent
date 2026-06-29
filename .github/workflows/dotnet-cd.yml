@@ -227,6 +227,12 @@ jobs:
         echo "Final tags to push:"
         echo "${{ steps.compose-tags.outputs.tags }}"
 
+    - name: Host disk + inodes
+      run: |
+        df -h
+        df -i
+        docker system df -v || true
+
     - name: Build and Push Docker Image
       id: build-and-push
       uses: docker/build-push-action@v3
