@@ -233,6 +233,21 @@ jobs:
         df -i
         docker system df -v || true
 
+    - name: Docker disk diagnostics
+      run: |
+        echo "=== Docker info ==="
+        docker info | egrep "Docker Root Dir|Storage Driver" || true
+
+        echo "=== Mount free space ==="
+        df -h /var /var/lib/docker /vsts || true
+
+        echo "=== Docker disk usage ==="
+        docker system df -v || true
+
+        echo "=== Largest Docker dirs ==="
+        du -sh /var/lib/docker/* 2>/dev/null | sort -h | tail -n 20 || true
+
+
     - name: Build and Push Docker Image
       id: build-and-push
       uses: docker/build-push-action@v3
