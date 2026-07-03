@@ -229,7 +229,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          dotnet_version: ${{ inputs.dotnet_version }}
+          dotnet_version: ${{ matrix.dotnet_version }}
           baseline_coverage_threshold: ${{ inputs.baseline_coverage_threshold }}
           minimum_coverage_threshold: ${{ inputs.minimum_coverage_threshold }}
           artifact_retention_days: ${{ inputs.artifact_retention_days }}
