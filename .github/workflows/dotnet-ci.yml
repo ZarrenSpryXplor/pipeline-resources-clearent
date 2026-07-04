@@ -52,11 +52,12 @@ on:
 jobs:
   setup:
     name: 'Scan Repo for .NET Versions'
+
     runs-on: ubuntu-latest
 
-    #runs-on:
-    #  group: CHQ
-    #  labels: linux
+#    runs-on:
+#      group: CHQ
+#      labels: linux
 
     timeout-minutes: 2
 
@@ -95,11 +96,11 @@ jobs:
   build:
     name: 'Continuous Integration'
 
-    #runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
 
-    runs-on:
-      group: CHQ
-      labels: linux
+#    runs-on:
+#      group: CHQ
+#      labels: linux
 
     needs: setup
 
