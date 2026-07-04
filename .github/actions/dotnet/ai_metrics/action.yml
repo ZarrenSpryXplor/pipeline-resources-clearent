@@ -165,10 +165,18 @@ runs:
         "$BUILD_TOOL" "${{ runner.workspace }}" -r xml
         ls -lah
         cp *.xml "${{ runner.workspace }}"
-        cp "${{ runner.temp }}"/**/coverage.cobertura.xml "${{ runner.workspace }}"
+        
+        RESULTS_DIR="${{ runner.workspace }}/${{ github.event.repository.name }}/TestResults"
+        mapfile -t covfiles < <(find "$RESULTS_DIR" -type f -name 'coverage.cobertura.xml' | sort)
+        if [ "${#covfiles[@]}" -eq 0 ]; then
+          echo "::error::No coverage.cobertura.xml found under $RESULTS_DIR"
+          exit 1
+        fi
+        cp "${covfiles[0]}" "${{ runner.workspace }}/coverage.cobertura.xml"
+        
         cd "${{ runner.workspace }}"
         ls -lah
-        
+
         echo "AI Metrics - Run Xplor.AI.Metrics.BuildTool completed successfully"
 
     - name: AI Metrics - Run Xplor.AI.Metrics.BuildTool - End
