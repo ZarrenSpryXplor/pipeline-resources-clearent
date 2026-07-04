@@ -13,13 +13,25 @@ runs:
     - name: Run Xplor AI Build Metrics Tool
       shell: bash
       run: |
+        set -euo pipefail
+
         echo "Run Xplor.AI.Metrics.BuildTool"
+
+        TOOL_PATH="${TOOL_PATH:-${RUNNER_TEMP}/tools}"
+        if command -v Xplor.AI.Metrics.BuildTool >/dev/null 2>&1; then
+          BUILD_TOOL="$(command -v Xplor.AI.Metrics.BuildTool)"
+        elif [ -x "$TOOL_PATH/Xplor.AI.Metrics.BuildTool" ]; then
+          BUILD_TOOL="$TOOL_PATH/Xplor.AI.Metrics.BuildTool"
+        else
+          echo "::error::Xplor.AI.Metrics.BuildTool was not found on PATH or at $TOOL_PATH. Run the install action before analyze."
+          exit 1
+        fi
+
         ls -lah
-        cd ${{ runner.workspace }}/tools
-        ./Xplor.AI.Metrics.BuildTool "${{ runner.workspace }}" -r xml
+        "$BUILD_TOOL" "${{ runner.workspace }}" -r xml
         ls -lah
-        cp *.xml ${{ runner.workspace }}
-        cp ${{ runner.temp }}/**/coverage.cobertura.xml ${{ runner.workspace }}
-        cd ${{ runner.workspace }}
+        cp *.xml "${{ runner.workspace }}"
+        cp "${{ runner.temp }}"/**/coverage.cobertura.xml "${{ runner.workspace }}"
+        cd "${{ runner.workspace }}"
         ls -lah
         echo "Xplor.AI.Metrics.BuildTool tool completed successfully"
