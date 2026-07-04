@@ -1,0 +1,4 @@
+#name: .NET Continuous Integration
+
+#on:
+#  workflow_call:
