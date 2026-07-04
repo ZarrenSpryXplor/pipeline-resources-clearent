@@ -50,13 +50,11 @@ runs:
           --tool-path "$TOOL_PATH" \
           --configfile "./nuget.config" \
           --ignore-failed-sources \
-          --create-manifest-if-needed \
         || dotnet tool install Xplor.AI.Metrics.BuildTool \
           --version "$AI_METRICS_PACKAGE_VERSION" \
           --tool-path "$TOOL_PATH" \
           --configfile "./nuget.config" \
-          --ignore-failed-sources \
-          --create-manifest-if-needed
+          --ignore-failed-sources
 
     - name: AI Metrics - Install Xplor.AI.Metrics.BuildTool - End
       if: ${{ always() }}
