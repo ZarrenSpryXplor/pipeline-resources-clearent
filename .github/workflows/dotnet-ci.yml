@@ -251,7 +251,10 @@ jobs:
         id: ai-metrics-analysis
         uses: xplor-pay/github-actions/.github/actions/dotnet/ai_metrics@main 
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_USERNAME: ${{ secrets.PACKAGE_READER_PAT_TOKEN != '' && secrets.PACKAGE_READER_PAT_USERNAME || 'x-access-token' }}
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_READER_PAT_TOKEN != '' && secrets.PACKAGE_READER_PAT_TOKEN || steps.package-reader-token.outputs.token }}
+          GITHUB_ORG: ${{ github.repository_owner }}
+          AI_METRICS_PACKAGE_VERSION: ${{ inputs.ai_metrics_package_version }}
         with:
           sftp_server: ${{ secrets.AI_METRICS_SFTP_SERVER }}
           ai_path: ${{ vars.AI_METRICS_AI_PATH}}
