@@ -30,7 +30,7 @@ runs:
   steps:
     - name: AI Metrics - Publish AI Metrics to Azure Storage
       continue-on-error: true
-      shell: powershell
+      shell: pwsh
       run: |-
         $computer = '${{ inputs.sftp_server }}'
         $aiPath = '${{ inputs.ai_path }}'

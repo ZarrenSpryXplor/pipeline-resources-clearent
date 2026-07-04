@@ -74,7 +74,7 @@ runs:
         echo "::notice::AI Metrics - Install AZCopy..."
 
     - name: AI Metrics - Install AZCopy
-      shell: powershell
+      shell: pwsh
       run: |
         $toolsPath = "${{ runner.workspace }}/tools"
         $azcopyPath = "$toolsPath/azcopy"
@@ -177,7 +177,7 @@ runs:
 
     - name: AI Metrics - Publish AI Metrics to Azure Storage
       continue-on-error: true
-      shell: powershell
+      shell: pwsh
       run: |-
         $computer = '${{ inputs.sftp_server }}'
         $aiPath = '${{ inputs.ai_path }}'

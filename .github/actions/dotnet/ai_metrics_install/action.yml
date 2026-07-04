@@ -35,7 +35,7 @@ runs:
           --create-manifest-if-needed
 
     - name: AI Metrics - Install AZCopy
-      shell: powershell
+      shell: pwsh
       run: |
         $toolsPath = "${{ runner.workspace }}/tools"
         $azcopyPath = "$toolsPath/azcopy"
