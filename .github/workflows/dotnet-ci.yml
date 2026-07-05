@@ -262,31 +262,3 @@ jobs:
           coverage_path: ${{ vars.AI_METRICS_COVERAGE_PATH }}
           container_name: ${{ vars.AI_METRICS_CONTAINER_NAME }}
           sas_key: ${{ secrets.AI_METRICS_SAS_KEY }}
-
-      - name: Install AI Metrics Tools
-        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        env:
-          # Keep these aligned with caller nuget.config placeholders (%GITHUB_USERNAME%/%GITHUB_TOKEN%).
-          GITHUB_USERNAME: ${{ secrets.PACKAGE_READER_PAT_TOKEN != '' && secrets.PACKAGE_READER_PAT_USERNAME || 'x-access-token' }}
-          GITHUB_TOKEN: ${{ secrets.PACKAGE_READER_PAT_TOKEN != '' && secrets.PACKAGE_READER_PAT_TOKEN || steps.package-reader-token.outputs.token }}
-          GITHUB_ORG: ${{ github.repository_owner }}
-          AI_METRICS_PACKAGE_VERSION: ${{ inputs.ai_metrics_package_version }}
-        uses: xplor-pay/github-actions/.github/actions/dotnet/ai_metrics_install@main
-        continue-on-error: true
-
-      - name: Run AI Metrics Analysis
-        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        uses: xplor-pay/github-actions/.github/actions/dotnet/ai_metrics_analyze@main
-        continue-on-error: true
-
-      - name: Publish AI Metrics Reports
-        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        uses: xplor-pay/github-actions/.github/actions/dotnet/ai_metrics_publish@main
-        with:
-          sftp_server: ${{ secrets.AI_METRICS_SFTP_SERVER }}
-          ai_path: ${{ vars.AI_METRICS_AI_PATH}}
-          coverage_path: ${{ vars.AI_METRICS_COVERAGE_PATH }}
-          container_name: ${{ vars.AI_METRICS_CONTAINER_NAME }}
-          sas_key: ${{ secrets.AI_METRICS_SAS_KEY }}
-        continue-on-error: true
-  

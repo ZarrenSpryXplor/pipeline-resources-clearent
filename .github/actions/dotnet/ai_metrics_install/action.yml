@@ -13,7 +13,7 @@ runs:
     - name: AI Metrics - Install Xplor.AI.Metrics.BuildTool - Start
       shell: bash
       run: |
-        echo "::notice::AI Metrics - Install Xplor.AI.Metrics.BuildTool..."
+        echo "::notice::Step 1 - AI Metrics - Install Xplor.AI.Metrics.BuildTool..."
 
     - name: AI Metrics - Install Xplor.AI.Metrics.BuildTool
       shell: bash
@@ -42,15 +42,15 @@ runs:
       shell: bash
       run: |
         if [ "${{ job.status }}" = "success" ]; then
-          echo "::notice::AI Metrics - Install Xplor.AI.Metrics.BuildTool completed successfully."
+          echo "::notice::Step 1 - AI Metrics - Install Xplor.AI.Metrics.BuildTool completed successfully."
         else
-          echo "::warning::AI Metrics - Install Xplor.AI.Metrics.BuildTool finished with status: ${{ job.status }}"
+          echo "::warning::Step 1 - AI Metrics - Install Xplor.AI.Metrics.BuildTool finished with status: ${{ job.status }}"
         fi
 
     - name: AI Metrics - Install AZCopy - Start
       shell: bash
       run: |
-        echo "::notice::AI Metrics - Install AZCopy..."
+        echo "::notice::Step 2 - AI Metrics - Install AZCopy..."
 
     - name: AI Metrics - Install AZCopy
       shell: pwsh
@@ -115,7 +115,7 @@ runs:
       shell: bash
       run: |
         if [ "${{ job.status }}" = "success" ]; then
-          echo "::notice::AI Metrics - Install AZCopy completed successfully."
+          echo "::notice::Step 2 - AI Metrics - Install AZCopy completed successfully."
         else
-          echo "::warning::AI Metrics - Install AZCopy finished with status: ${{ job.status }}"
+          echo "::warning::Step 2 - AI Metrics - Install AZCopy finished with status: ${{ job.status }}"
         fi

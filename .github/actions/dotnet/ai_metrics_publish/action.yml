@@ -28,6 +28,11 @@ runs:
   using: "composite"
 
   steps:
+    - name: AI Metrics - Publish AI Metrics to Azure Storage - Start
+      shell: bash
+      run: |
+        echo "::notice::Step 4 - AI Metrics - Publish AI Metrics to Azure Storage..."
+
     - name: AI Metrics - Publish AI Metrics to Azure Storage
       continue-on-error: true
       shell: pwsh
@@ -65,19 +70,20 @@ runs:
         # Upload the primary AI Metrics XML files produced from the solution name.
         $files = Get-ChildItem -Path . -Filter "${fileNm}*.xml" -File
 
-        Write-Host "AI Metrics local files found: $files"
+        Write-Host "Step 4 - AI Metrics local files found: $files"
 
         $azcopyPath = "${{ runner.workspace }}/tools/azcopy"
 
-        try {
-
-            foreach($file in $files){
+        try 
+        {
+            foreach($file in $files)
+            {
                 $fileName = Split-Path -Path $file -Leaf
                 $tempFilePath = Join-Path $tempDir $fileName
 
-              # Copy to the temp location so each upload uses a stable path.
+                # Copy to the temp location so each upload uses a stable path.
                 Copy-Item -Path $file.FullName -Destination $tempFilePath -Force
-                Write-Host "Copied $file to temp location: $tempFilePath"
+                Write-Host "Step 4 - Copied $file to temp location: $tempFilePath"
 
                 Write-Host "Uploading $tempFilePath to https://$computer/$containerName/$aiPath/$fileName"
 
@@ -85,38 +91,67 @@ runs:
             }
 
             $iterator = 1;
-            foreach($file in $coverageFiles){
+            foreach($file in $coverageFiles)
+            {
                 # Rename each coverage file uniquely before upload to avoid collisions in storage.
                 $remoteNm = "${fileNm}_${datetime}_${iterator}.cobertura.xml"
                 $tempFilePath = Join-Path $tempDir $remoteNm
 
                 # Copy to the temp location so the final remote name matches the upload target.
                 Copy-Item -Path $file.FullName -Destination $tempFilePath -Force
-                Write-Host "Copied $file to temp location: $tempFilePath"
+                Write-Host "Step 4 - Copied $file to temp location: $tempFilePath"
 
                 $fileName = Split-Path -Path $file -Leaf
-                Write-Host "Rename $coveragePath$fileName to $remoteNm"
+                Write-Host "Step 4 - Rename $coveragePath$fileName to $remoteNm"
 
                 . "$azcopyPath" cp "$tempFilePath" "https://$computer/$containerName/$coveragePath/$remoteNm`?$sasKey" --overwrite=true --log-level DEBUG
                 $iterator++;
             }
         }
-        catch {
+        catch 
+        {
             Write-Host $_.exception.Message
         }
-        finally {
+        finally 
+        {
             # Remove the temp upload staging directory after the transfer completes.
-            if (Test-Path $tempDir) {
+            if (Test-Path $tempDir) 
+            {
                 Remove-Item -Path $tempDir -Recurse -Force
                 Write-Host "Cleaned up temporary directory: $tempDir"
             }
         }
         exit 0
-    
-    - name: Publish azcopy logs as build artifacts
+
+    - name: AI Metrics - Publish AI Metrics to Azure Storage - End
+      if: ${{ always() }}
+      shell: bash
+      run: |
+        if [ "${{ job.status }}" = "success" ]; then
+          echo "::notice::Step 4 - AI Metrics - Publish to Azure Storage completed successfully."
+        else
+          echo "::warning::Step 4 - AI Metrics - Publish to Azure Storage finished with status: ${{ job.status }}"
+        fi
+
+    - name: AI Metrics - Publish AZCopy Logs as Build Artifacts - Start
+      shell: bash
+      run: |
+        echo "::notice::Step 5 - AI Metrics - Publish AZCopy Logs as Build Artifacts..."
+
+    - name: AI Metrics - Publish AZCopy Logs as Build Artifacts
       continue-on-error: true
       uses: actions/upload-artifact@v7
       with:
         name: AzCopyLogs
         path: ${{ runner.workspace }}/.azcopy
         include-hidden-files: true
+  
+    - name: AI Metrics - Publish AZCopy Logs as Build Artifacts - End
+      if: ${{ always() }}
+      shell: bash
+      run: |
+        if [ "${{ job.status }}" = "success" ]; then
+          echo "::notice::Step 5 - AI Metrics - Publish AZCopy Logs as Build Artifacts completed successfully."
+        else
+          echo "::warning::Step 5 - AI Metrics - Publish AZCopy Logs as Build Artifacts finished with status: ${{ job.status }}"
+        fi
