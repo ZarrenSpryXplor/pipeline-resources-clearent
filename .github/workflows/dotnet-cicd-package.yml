@@ -353,6 +353,15 @@ jobs:
             --configfile
             ./nuget.config
 
+      - name: Build Repository for Packing
+        uses: xplor-pay/github-actions/.github/actions/dotnet/run_dotnet@main
+        with:
+          command: build
+          arguments: |
+            --configuration
+            Release
+            --no-restore
+
       - name: Pack NuGet Package(s)
         run: |
           set -euo pipefail
@@ -362,10 +371,10 @@ jobs:
 
           if [ "$SLN_COUNT" -gt 0 ]; then
             echo "Found solution file(s) in root. Packing solution..."
-            dotnet pack --configuration Release --no-restore --output ./dist
+            dotnet pack --configuration Release --no-build --no-restore --output ./dist
           else
             echo "No .sln found in root. Packing eligible .csproj files recursively..."
-            find . \( -path "./test" -o -path "./test/*" -o -path "./sample" -o -path "./sample/*" \) -prune -o -name "*.csproj" ! -name "*Tests*.csproj" ! -name "*Sample*.csproj" -exec dotnet pack --configuration Release --no-restore --output ./dist {} +
+            find . \( -path "./test" -o -path "./test/*" -o -path "./sample" -o -path "./sample/*" \) -prune -o -name "*.csproj" ! -name "*Tests*.csproj" ! -name "*Sample*.csproj" -exec dotnet pack --configuration Release --no-build --no-restore --output ./dist {} +
           fi
 
       - name: Upload NuGet Package(s) to Actions Artifact Storage for Publish to GitHub Packages
