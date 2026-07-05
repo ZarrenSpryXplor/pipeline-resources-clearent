@@ -1,0 +1,125 @@
+name: .NET CD NuGet Reusable
+
+on:
+  workflow_call:
+    inputs:
+      upload_package:
+        description: Toggle to indicate whether NuGet packaging and publishing should run.
+        required: false
+        type: boolean
+        default: true
+
+      artifact_retention_days:
+        description: Number of days to retain workflow artifacts.
+        required: false
+        type: string
+        default: "7"
+
+      pack_dotnet_version:
+        description: .NET SDK version to use for pack and publish jobs.
+        required: true
+        type: string
+
+jobs:
+  pack:
+    name: Pack NuGet Package(s)
+    if: ${{ inputs.upload_package == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Setup Environment
+        uses: xplor-pay/github-actions/.github/actions/dotnet/environment_setup@main
+        with:
+          dotnet_version: ${{ inputs.pack_dotnet_version }}
+
+      - name: Restore Repository Dependencies
+        uses: xplor-pay/github-actions/.github/actions/dotnet/run_dotnet@main
+        env:
+          GITHUB_USERNAME: ${{ secrets.PACKAGE_READER_PAT_USERNAME }}
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_READER_PAT_TOKEN }}
+          GITHUB_ORG: ${{ github.repository_owner }}
+        with:
+          command: restore
+          arguments: |
+            --configfile
+            ./nuget.config
+
+      - name: Build Repository for Packing
+        uses: xplor-pay/github-actions/.github/actions/dotnet/run_dotnet@main
+        with:
+          command: build
+          arguments: |
+            --configuration
+            Release
+            --no-restore
+
+      - name: Pack NuGet Package(s)
+        run: |
+          set -euo pipefail
+
+          SLN_COUNT=$(find . -maxdepth 1 -name "*.sln" | wc -l)
+
+          if [ "$SLN_COUNT" -gt 0 ]; then
+            echo "Found solution file(s) in root. Packing solution..."
+            dotnet pack --configuration Release --no-build --no-restore --output ./dist
+          else
+            echo "No .sln found in root. Packing eligible .csproj files recursively..."
+            find . \( -path "./test" -o -path "./test/*" -o -path "./sample" -o -path "./sample/*" \) -prune -o -name "*.csproj" ! -name "*Tests*.csproj" ! -name "*Sample*.csproj" -exec dotnet pack --configuration Release --no-build --no-restore --output ./dist {} +
+          fi
+
+      - name: Upload NuGet Package(s) to Actions Artifact Storage for Publish to GitHub Packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: nuget-package
+          path: ./dist
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+  publish:
+    name: Publish NuGet Package(s) to GitHub Packages
+    if: ${{ inputs.upload_package == true }}
+    needs:
+      - pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Setup Environment
+        uses: xplor-pay/github-actions/.github/actions/dotnet/environment_setup@main
+        with:
+          dotnet_version: ${{ inputs.pack_dotnet_version }}
+
+      - name: Download NuGet Package(s) from Actions Artifact Storage for Publish to GitHub Packages
+        uses: actions/download-artifact@v7
+        with:
+          name: nuget-package
+          path: ./dist
+
+      - name: Publish NuGet Package(s) to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_WRITER_PAT_TOKEN }}
+          GITHUB_ORG: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+
+          echo "Publishing NuGet packages to GitHub Packages..."
+          for nupkg in ./dist/*.nupkg; do
+            dotnet nuget push "$nupkg" \
+              --source "https://nuget.pkg.github.com/$GITHUB_ORG/index.json" \
+              --api-key "$GITHUB_TOKEN" \
+              --skip-duplicate
+          done

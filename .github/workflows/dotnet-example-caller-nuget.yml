@@ -1,0 +1,34 @@
+name: .NET Example Caller NuGet
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  ci:
+    name: Run CI Reusable Workflow
+    uses: ./.github/workflows/dotnet-ci-reusable.yml
+    with:
+      baseline_coverage_threshold: "0"
+      minimum_coverage_threshold: "80"
+      artifact_retention_days: "7"
+      enforce_code_style: false
+      ai_metrics_package_repository: Xplor.AI.Metrics.BuildTool
+      ai_metrics_package_version: "1.0.2"
+      pack_dotnet_version: ""
+    secrets: inherit
+
+  cd:
+    name: Run CD NuGet Reusable Workflow
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    needs:
+      - ci
+    uses: ./.github/workflows/dotnet-cd-nuget-reusable.yml
+    with:
+      upload_package: true
+      artifact_retention_days: "7"
+      pack_dotnet_version: ${{ needs.ci.outputs.pack_dotnet_version }}
+    secrets: inherit
