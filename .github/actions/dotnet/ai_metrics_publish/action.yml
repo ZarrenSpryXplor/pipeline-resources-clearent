@@ -44,7 +44,14 @@ runs:
         Set-Location -Path '${{ runner.workspace }}'
         Write-Host "Changed directory: $(Get-Location)"
 
-        # Create temporary directory for file copies
+        # Keep AZCopy logs inside the workspace so the artifact upload step can find them reliably.
+        $azcopyLogPath = Join-Path '${{ runner.workspace }}' '.azcopy'
+        New-Item -ItemType Directory -Path $azcopyLogPath -Force | Out-Null
+        $env:AZCOPY_LOG_LOCATION = $azcopyLogPath
+        $env:AZCOPY_JOB_PLAN_LOCATION = $azcopyLogPath
+        Write-Host "AZCopy logs will be written to $azcopyLogPath"
+
+        # Stage files in a temp directory before uploading so the source files stay untouched.
         $tempDir = Join-Path "${{ runner.temp }}" "azcopy_upload_$datetime"
         New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
         Write-Host "Created temporary directory: $tempDir"
@@ -55,6 +62,7 @@ runs:
         $coverageFiles = Get-ChildItem -Path '.' -Recurse -Include "*.cobertura.xml"
         #-Filter "*.cobertura.xml|*.coverage"
 
+        # Upload the primary AI Metrics XML files produced from the solution name.
         $files = Get-ChildItem -Path . -Filter "${fileNm}*.xml" -File
 
         Write-Host "AI Metrics local files found: $files"
@@ -67,7 +75,7 @@ runs:
                 $fileName = Split-Path -Path $file -Leaf
                 $tempFilePath = Join-Path $tempDir $fileName
 
-                # Copy to temp location first
+              # Copy to the temp location so each upload uses a stable path.
                 Copy-Item -Path $file.FullName -Destination $tempFilePath -Force
                 Write-Host "Copied $file to temp location: $tempFilePath"
 
@@ -78,10 +86,11 @@ runs:
 
             $iterator = 1;
             foreach($file in $coverageFiles){
+                # Rename each coverage file uniquely before upload to avoid collisions in storage.
                 $remoteNm = "${fileNm}_${datetime}_${iterator}.cobertura.xml"
                 $tempFilePath = Join-Path $tempDir $remoteNm
 
-                # Copy to temp location first
+                # Copy to the temp location so the final remote name matches the upload target.
                 Copy-Item -Path $file.FullName -Destination $tempFilePath -Force
                 Write-Host "Copied $file to temp location: $tempFilePath"
 
@@ -96,7 +105,7 @@ runs:
             Write-Host $_.exception.Message
         }
         finally {
-            # Clean up temporary directory
+            # Remove the temp upload staging directory after the transfer completes.
             if (Test-Path $tempDir) {
                 Remove-Item -Path $tempDir -Recurse -Force
                 Write-Host "Cleaned up temporary directory: $tempDir"
