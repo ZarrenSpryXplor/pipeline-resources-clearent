@@ -305,6 +305,7 @@ runs:
       with:
         name: AzCopyLogs
         path: ${{ runner.workspace }}/.azcopy
+        include-hidden-files: true
   
     - name: AI Metrics - Publish AZCopy Logs as Build Artifacts - End
       if: ${{ always() }}
