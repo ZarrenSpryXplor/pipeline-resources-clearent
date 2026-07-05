@@ -1,0 +1,265 @@
+name: Continuous Integration and Delivery
+
+on:
+  workflow_call:
+    inputs:
+      baseline_coverage_threshold:
+        description: 'Baseline coverage percentage threshold for pull requests to use when no baseline is defined in the coverage.txt in the main branch.'
+        required: false
+        type: string
+        default: '0'
+
+      minimum_coverage_threshold:
+        description: 'Minimum overall line coverage threshold, enforced by ReportGenerator.'
+        required: false
+        type: string
+        default: '80'
+
+      base_ref:
+        description: 'Base branch for comparison in pull requests'
+        type: string
+        required: false
+        
+      head_ref:
+        description: 'Head branch containing changes for pull requests'
+        type: string
+        required: false
+
+      artifact_retention_days:
+        description: 'Number of days to retain workflow artifacts.'
+        required: false
+        type: string
+        default: '7'
+
+      enforce_code_style:
+        description: 'Toggle to indicate whether code style enforcement should be applied.'
+        required: false
+        type: boolean
+        default: false
+
+      ai_metrics_package_repository:
+        description: 'Repository that owns the Xplor.AI.Metrics.BuildTool package.'
+        required: false
+        type: string
+        default: 'Xplor.AI.Metrics.BuildTool'
+
+      ai_metrics_package_version:
+        description: 'Version of Xplor.AI.Metrics.BuildTool to install.'
+        required: false
+        type: string
+        default: '1.0.2'
+
+jobs:
+  setup:
+    name: 'Scan Repo for .NET Versions'
+
+    runs-on: ubuntu-latest
+
+#    runs-on:
+#      group: CHQ
+#      labels: linux
+
+    timeout-minutes: 2
+
+    permissions:
+      contents: read
+
+    outputs:
+      matrix: ${{ steps.get-versions.outputs.matrix }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Get .NET Version(s) from TargetFramework(s)
+        id: get-versions
+        shell: bash
+        run: | 
+          # 1. Search for <TargetFramework> OR <TargetFrameworks> tags
+          # 2. Extract content between the tags
+          # 3. Handle multi-targeting (split by ';') and single targets
+          # 4. Filter out netstandard versions
+          # 5. Update from TargetFrameworkMoniker to SDK-style version (e.g., net6.0 to 6.0.x)
+          # 6. Clean up any extra spaces and unique-sort the list
+          VERSIONS=$(grep -rE "<TargetFrameworks?>(.*)</TargetFrameworks?>" --include="*.csproj" --include="*.props" . | \
+          sed -E 's/.*<TargetFrameworks?>//;s/<\/TargetFrameworks?>.*//' | \
+          tr ';' '\n' | sed 's/ //g' | \
+          grep -v "standard" | \
+          sed -E 's/^(netcoreapp|net)([0-9]+(\.[0-9]+)?).*/\2.x/' | \
+          sort -u | xargs)
+          
+          # Convert the space-separated list into a JSON array: ["net6.0", "net8.0"]
+          JSON_ARRAY=$(echo $VERSIONS | jq -R -c 'split(" ")')
+          
+          echo "matrix=$JSON_ARRAY" >> $GITHUB_OUTPUT
+
+  build:
+    name: 'Continuous Integration'
+
+    runs-on: ubuntu-latest
+
+#    runs-on:
+#      group: CHQ
+#      labels: linux
+
+    needs: setup
+
+    strategy:
+      matrix:
+        dotnet_version: ${{ fromJson(needs.setup.outputs.matrix) }}
+    
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+      packages: read
+
+    # Org-level environment variables
+    # Settings -> Secrets and Variables -> Actions -> Variables
+    env:
+      NUGET_PLUGIN_HANDSHAKE_TIMEOUT_IN_SECONDS: ${{ vars.NUGET_PLUGIN_HANDSHAKE_TIMEOUT_IN_SECONDS || '20' }}
+      NUGET_PLUGIN_REQUEST_TIMEOUT_IN_SECONDS: ${{ vars.NUGET_PLUGIN_REQUEST_TIMEOUT_IN_SECONDS || '20' }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: 'Setup Environment'
+        uses: xplor-pay/github-actions/.github/actions/dotnet/environment_setup@main
+        with:
+          dotnet_version: ${{ matrix.dotnet_version }}
+
+      # At time of writing (20260622),
+      # GitHub Packages does not support tokens from GitHub Apps.
+      # It will give a "scope does not include" error message.
+      - name: Verify nuget.config Exists at Repository Root
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+
+          if [ ! -f ./nuget.config ]; then
+            echo "::error::nuget.config was not found at repository root."
+            exit 1
+          fi
+
+          echo "nuget.config exists at repository root."
+
+      - name: List NuGet Sources from nuget.config
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+
+          echo "Configured NuGet sources from ./nuget.config:"
+          dotnet nuget list source --configfile ./nuget.config
+
+      - name: Verify Authentication to GitHub Packages
+        continue-on-error: true
+        env:
+          GITHUB_USERNAME: ${{ secrets.PACKAGE_READER_PAT_USERNAME }}
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_READER_PAT_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          FEED_URL="https://nuget.pkg.github.com/xplor-pay/index.json"
+          STATUS=$(curl -sS -o /dev/null -w "%{http_code}" -u "$GITHUB_USERNAME:$GITHUB_TOKEN" "$FEED_URL")
+
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::GitHub Packages auth preflight failed (HTTP $STATUS) for $FEED_URL. Verify caller permissions and package access settings."
+            exit 1
+          fi
+
+          echo "GitHub Packages auth preflight succeeded (HTTP $STATUS)."
+
+      - name: Restore Repository Dependencies
+        uses: xplor-pay/github-actions/.github/actions/dotnet/run_dotnet@main
+        env:
+          GITHUB_USERNAME: ${{ secrets.PACKAGE_READER_PAT_USERNAME }}
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_READER_PAT_TOKEN }}
+          GITHUB_ORG: ${{ github.repository_owner }}
+        with:
+          command: restore
+          arguments: |
+            --configfile
+            ./nuget.config
+
+      - name: Review Repository Dependencies for Vulnerabilities
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v5
+        with:
+          comment-summary-in-pr: always
+          base-ref: ${{ inputs.base_ref }}
+          head-ref: ${{ inputs.head_ref }}
+
+      - name: Enforce .editorconfig Code Styles
+        if: inputs.enforce_code_style == true
+        uses: xplor-pay/github-actions/.github/actions/dotnet/run_dotnet@main
+        with:
+          command: format
+          arguments: |
+            --verbosity
+            detailed
+            --verify-no-changes
+        
+      - name: Build Repository
+        uses: xplor-pay/github-actions/.github/actions/dotnet/run_dotnet@main
+        with:
+          command: build
+          arguments: |
+            --configuration
+            Release
+            --no-restore
+            -p:CopyLocalLockFileAssemblies=true
+
+      - name: Run Tests
+        uses: xplor-pay/github-actions/.github/actions/dotnet/run_dotnet@main
+        with:
+          command: test
+          arguments: |
+            --configuration
+            Release
+            --no-build
+            --no-restore
+            --verbosity
+            normal
+            --filter:TestCategory!~Integration&Category!~Integration
+            --collect:XPlat Code Coverage;Format=opencover,cobertura
+            --results-directory
+            ./TestResults
+            --
+            DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SkipAutoProps=true
+            DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude=[*Tests*]*
+            DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeAssembliesWithoutSources=MissingAll
+            DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.SingleHit=false
+            DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.IncludeTestAssembly=false
+            DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.UseSourceLink=false
+            DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.DeterministicReport=false
+            DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByAttribute=Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute
+
+      - name: Code Coverage Analysis and Reporting
+        id: coverage-threshold
+        uses: xplor-pay/github-actions/.github/actions/dotnet/coverage@main 
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          dotnet_version: ${{ matrix.dotnet_version }}
+          baseline_coverage_threshold: ${{ inputs.baseline_coverage_threshold }}
+          minimum_coverage_threshold: ${{ inputs.minimum_coverage_threshold }}
+          artifact_retention_days: ${{ inputs.artifact_retention_days }}
+
+      - name: AI Metrics Analysis and Reporting
+#       if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        id: ai-metrics-analysis
+        uses: xplor-pay/github-actions/.github/actions/dotnet/ai_metrics@main 
+        env:
+          GITHUB_USERNAME: ${{ secrets.PACKAGE_READER_PAT_TOKEN != '' && secrets.PACKAGE_READER_PAT_USERNAME || 'x-access-token' }}
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_READER_PAT_TOKEN != '' && secrets.PACKAGE_READER_PAT_TOKEN || steps.package-reader-token.outputs.token }}
+          GITHUB_ORG: ${{ github.repository_owner }}
+          AI_METRICS_PACKAGE_VERSION: ${{ inputs.ai_metrics_package_version }}
+        with:
+          sftp_server: ${{ secrets.AI_METRICS_SFTP_SERVER }}
+          ai_path: ${{ vars.AI_METRICS_AI_PATH}}
+          coverage_path: ${{ vars.AI_METRICS_COVERAGE_PATH }}
+          container_name: ${{ vars.AI_METRICS_CONTAINER_NAME }}
+          sas_key: ${{ secrets.AI_METRICS_SAS_KEY }}
