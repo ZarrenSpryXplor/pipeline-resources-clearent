@@ -210,6 +210,7 @@ jobs:
             --configuration
             Release
             --no-restore
+            -p:CopyLocalLockFileAssemblies=true
 
       - name: Run Tests
         uses: xplor-pay/github-actions/.github/actions/dotnet/run_dotnet@main
