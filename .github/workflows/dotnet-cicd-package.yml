@@ -422,44 +422,10 @@ jobs:
         run: |
             set -euo pipefail
 
-            CONFIG_FILE="./nuget.config"
-            TEMP_CONFIG="$RUNNER_TEMP/nuget.publish.config"
-
-            cleanup() {
-              rm -f "$TEMP_CONFIG"
-            }
-            trap cleanup EXIT
-
-            if [ -f "$CONFIG_FILE" ]; then
-              cp "$CONFIG_FILE" "$TEMP_CONFIG"
-            else
-              printf '%s\n' \
-                '<?xml version="1.0" encoding="utf-8"?>' \
-                '<configuration>' \
-                '  <packageSources>' \
-                '    <clear />' \
-                '    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />' \
-                '  </packageSources>' \
-                '</configuration>' > "$TEMP_CONFIG"
-            fi
-
-            if dotnet nuget list source --configfile "$TEMP_CONFIG" | grep -qi "github"; then
-              dotnet nuget update source github \
-                --source "https://nuget.pkg.github.com/$GITHUB_ORG/index.json" \
-                --username "$GITHUB_USERNAME" \
-                --password "$GITHUB_TOKEN" \
-                --store-password-in-clear-text \
-                --configfile "$TEMP_CONFIG"
-            else
-              dotnet nuget add source "https://nuget.pkg.github.com/$GITHUB_ORG/index.json" \
-                --name github \
-                --username "$GITHUB_USERNAME" \
-                --password "$GITHUB_TOKEN" \
-                --store-password-in-clear-text \
-                --configfile "$TEMP_CONFIG"
-            fi
-
             echo "Publishing NuGet packages to GitHub Packages..."
             for nupkg in ./dist/*.nupkg; do
-              dotnet nuget push "$nupkg" --source "github" --skip-duplicate --configfile "$TEMP_CONFIG"
+              dotnet nuget push "$nupkg" \
+                --source "https://nuget.pkg.github.com/$GITHUB_ORG/index.json" \
+                --api-key "$GITHUB_TOKEN" \
+                --skip-duplicate
             done
