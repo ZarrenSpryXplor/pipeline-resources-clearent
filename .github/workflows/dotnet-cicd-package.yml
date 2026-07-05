@@ -380,7 +380,7 @@ jobs:
       - name: Upload NuGet Package(s) to Actions Artifact Storage for Publish to GitHub Packages
         uses: actions/upload-artifact@v7
         with:
-          name: nuget-dist
+          name: nuget-package
           path: ./dist
           retention-days: ${{ inputs.artifact_retention_days }}
 
@@ -411,7 +411,7 @@ jobs:
       - name: Download NuGet Package(s) from Actions Artifact Storage for Publish to GitHub Packages
         uses: actions/download-artifact@v7
         with:
-          name: nuget-dist
+          name: nuget-package
           path: ./dist
 
       - name: Publish NuGet Package(s) to GitHub Packages
