@@ -236,7 +236,7 @@ runs:
         $azcopyPath = "${{ runner.workspace }}/tools/azcopy"
 
         try 
-        
+        {
             foreach($file in $files)
             {
                 $fileName = Split-Path -Path $file -Leaf
