@@ -1,4 +1,4 @@
-name: .NET CD NuGet Reusable
+name: Continuous Delivery Reusable Workflow
 
 on:
   workflow_call:
