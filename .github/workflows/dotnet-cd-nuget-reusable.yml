@@ -83,7 +83,7 @@ jobs:
           retention-days: ${{ inputs.artifact_retention_days }}
 
   publish:
-    name: Publish NuGet Package(s) to GitHub Packages
+    name: Publish Package(s)
     if: ${{ inputs.upload_package == true }}
     needs:
       - pack
