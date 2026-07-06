@@ -12,6 +12,8 @@ jobs:
     name: Run CI Reusable Workflow
     uses: ./.github/workflows/dotnet-ci-reusable.yml
     with:
+      # PR-specific refs are inferred inside the reusable workflow from github.event.pull_request.
+      # No base_ref/head_ref inputs are required from the caller.
       baseline_coverage_threshold: "0"
       minimum_coverage_threshold: "80"
       artifact_retention_days: "7"

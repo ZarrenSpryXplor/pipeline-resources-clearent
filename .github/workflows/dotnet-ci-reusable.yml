@@ -15,16 +15,6 @@ on:
         type: string
         default: "80"
 
-      base_ref:
-        description: Base branch for comparison in pull requests.
-        type: string
-        required: false
-
-      head_ref:
-        description: Head branch containing changes for pull requests.
-        type: string
-        required: false
-
       artifact_retention_days:
         description: Number of days to retain workflow artifacts.
         required: false
@@ -146,6 +136,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      # PR comments from dependency review and coverage reporting require this on pull_request runs.
       pull-requests: write
       packages: read
 
@@ -219,8 +210,8 @@ jobs:
         uses: actions/dependency-review-action@v5
         with:
           comment-summary-in-pr: always
-          base-ref: ${{ inputs.base_ref }}
-          head-ref: ${{ inputs.head_ref }}
+          base-ref: ${{ github.event.pull_request.base.sha }}
+          head-ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Enforce .editorconfig Code Styles
         if: inputs.enforce_code_style == true
