@@ -270,6 +270,7 @@ jobs:
           artifact_retention_days: ${{ inputs.artifact_retention_days }}
 
       - name: AI Metrics Analysis and Reporting
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         id: ai-metrics-analysis
         uses: xplor-pay/github-actions/.github/actions/dotnet/ai_metrics@main
         env:
