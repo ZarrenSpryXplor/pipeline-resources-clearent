@@ -288,6 +288,9 @@ jobs:
 
     needs: [ keeper, containerize ]
 
+    permissions:
+      contents: read
+
     steps:
       - name: Checkout Source Code Repository
         uses: actions/checkout@v7
