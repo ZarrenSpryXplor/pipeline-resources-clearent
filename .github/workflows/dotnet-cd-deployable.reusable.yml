@@ -1,0 +1,454 @@
+name: Continuous Delivery Reusable Workflow
+
+on:
+  workflow_call:
+    inputs:
+      rancher_stack_name:
+        description: 'Name of the Rancher stack to deploy.'
+        required: true
+        type: string
+
+      rancher_service_name:
+        description: 'Name of the Rancher service to deploy.'
+        required: true
+        type: string
+
+      rancher_service_environment:
+        description: 'Environment of the Rancher service to deploy.'
+        required: true
+        type: string
+
+      container_scale:
+        description: 'How many instances of the container to run in this environment.'
+        required: true
+        type: number
+
+      application_type:
+        description: 'Type of application being deployed. Valid values are web_service, service, and cron_job.'
+        required: true
+        type: string
+
+      image_name:
+        description: 'Optional Docker image name override (repository name only, no registry).'
+        required: false
+        type: string
+        default: ''
+
+      image_tag:
+        description: 'Optional canonical Docker tag to publish in addition to metadata-generated tags.'
+        required: false
+        type: string
+        default: ''
+
+      trust_store:
+        description: 'Path to the trust store file for the Rancher service.'
+        required: false
+        type: string
+        default: '/opt/docker/keys/testAppTrustStore'
+
+      trust_password:
+        description: 'Password for the trust store file for the Rancher service.'
+        required: false
+        type: string
+        default: 'changeit'
+
+      java_options:
+        description: 'Java options for the Rancher service.'
+        required: false
+        type: string
+        default: '-Xmx512m'
+
+      cron_expression:
+        description: 'Cron expression for the Rancher cron job.'
+        required: false
+        type: string
+        default: ''
+
+env:
+  REGISTRY: ghcr.io/xplor-pay
+
+jobs:
+  keeper:
+    name: Keeper Security Integration
+
+    runs-on:
+      group: CHQ
+      labels: linux
+    #runs-on: ubuntu-latest
+
+    outputs:
+      RANCHER_URL: ${{ steps.ksecrets.outputs.RANCHER_URL }}
+      RANCHER_ACCESS_KEY: ${{ steps.ksecrets.outputs.RANCHER_ACCESS_KEY }}
+      RANCHER_SECRET_KEY: ${{ steps.ksecrets.outputs.RANCHER_SECRET_KEY }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Fetch Rancher URL from Keeper Vault
+        id: ksecrets
+        uses: Keeper-Security/ksm-action@v1
+        with:
+          # Pulls the correct configuration based on the manual input choice
+          keeper-secret-config: ${{ secrets.RANCHER1_LAUNCH_DEV }}
+          secrets: |
+            Rancher/field/url > RANCHER_URL
+            Rancher/field/Access Key > RANCHER_ACCESS_KEY
+            Rancher/field/Secret Key > RANCHER_SECRET_KEY
+
+      - name: Keeper Vault Connectivity Verification
+        env:
+          RANCHER_URL: ${{ steps.ksecrets.outputs.RANCHER_URL }}
+        run: |
+          echo "=== Keeper Connection Verification ==="
+
+          echo "RANCHER_URL length: ${#RANCHER_URL}"
+
+          if [ -z "$RANCHER_URL" ]; then
+            echo "❌ ERROR: RANCHER_URL is completely empty. Check your Record Title or KEEPER_SECRET_CONFIG."
+            exit 1
+          fi
+
+          URL_LENGTH=${#RANCHER_URL}
+          echo "✅ SUCCESS: Secret retrieved successfully!"
+          echo "🔗 Secret Data Length: $URL_LENGTH characters"
+
+          PREFIX_PREVIEW=$(echo "$RANCHER_URL" | cut -c 1-5)
+          echo "📡 URL Prefix Preview: ${PREFIX_PREVIEW}..."
+          echo "======================================"
+
+  containerize:
+    name: Build and Push Docker Image
+
+    runs-on: 
+      group: CHQ
+      labels: linux
+    #runs-on: ubuntu-latest
+
+    needs: keeper
+
+    timeout-minutes: 45
+
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
+      pull-requests: write
+      packages: write
+
+    env:
+      NUGET_PLUGIN_HANDSHAKE_TIMEOUT_IN_SECONDS: ${{ vars.NUGET_PLUGIN_HANDSHAKE_TIMEOUT_IN_SECONDS || '20' }}
+      NUGET_PLUGIN_REQUEST_TIMEOUT_IN_SECONDS: ${{ vars.NUGET_PLUGIN_REQUEST_TIMEOUT_IN_SECONDS || '20' }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Generate Xplor Pay Package Writer App Token (for GHCR push)
+        id: package-writer-token-docker
+        uses: actions/create-github-app-token@v3
+        continue-on-error: true
+        with:
+          client-id: ${{ secrets.PACKAGE_WRITER_APP_CLIENT_ID }}
+          private-key: ${{ secrets.PACKAGE_WRITER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            ${{ github.event.repository.name }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.PACKAGE_WRITER_PAT_TOKEN != '' && secrets.PACKAGE_WRITER_PAT_USERNAME || 'x-access-token' }}
+          password: ${{ secrets.PACKAGE_WRITER_PAT_TOKEN != '' && secrets.PACKAGE_WRITER_PAT_TOKEN || steps.package-writer-token-docker.outputs.token != '' && steps.package-writer-token-docker.outputs.token || secrets.GITHUB_TOKEN }}
+
+      - name: Report GHCR auth mode
+        shell: bash
+        run: |
+          if [ -n "${{ secrets.PACKAGE_WRITER_PAT_TOKEN }}" ]; then
+            echo "Using package writer PAT for GHCR push authentication."
+            if [ -z "${{ secrets.PACKAGE_WRITER_PAT_USERNAME }}" ]; then
+              echo "::warning::PACKAGE_WRITER_PAT_USERNAME is not set. Set it to the PAT owner's GitHub username."
+            fi
+          elif [ -n "${{ steps.package-writer-token-docker.outputs.token }}" ]; then
+            echo "Using package writer GitHub App token for GHCR push authentication."
+          else
+            echo "::warning::Using GITHUB_TOKEN for GHCR push authentication. This token may not be allowed to create organization packages."
+          fi
+
+      - name: Generate Xplor Pay Package Reader App Token (for Docker build)
+        id: package-reader-token-docker
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.PACKAGE_READER_APP_CLIENT_ID }}
+          private-key: ${{ secrets.PACKAGE_READER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            ${{ github.event.repository.name }}
+
+      - name: Find Dockerfile path
+        id: find-dockerfile
+        shell: bash
+        run: |-
+          DOCKERFILE_PATH=$(find . -type f -name Dockerfile -not -path "./.git/*" | head -n 1)
+          if [ -z "$DOCKERFILE_PATH" ]; then
+            echo "::error::No Dockerfile found in repository."
+            exit 1
+          fi
+          echo "dockerfilePath=$DOCKERFILE_PATH" >> "$GITHUB_ENV"
+          echo "dockerfile_path=$DOCKERFILE_PATH" >> "$GITHUB_OUTPUT"
+          echo "Dockerfile location: $DOCKERFILE_PATH"
+
+      - name: Resolve Docker image name
+        id: resolve-image
+        shell: bash
+        run: |
+          RAW_IMAGE_NAME="${{ inputs.image_name }}"
+
+          if [ -z "$RAW_IMAGE_NAME" ]; then
+            RAW_IMAGE_NAME="${{ github.event.repository.name }}"
+          fi
+
+          # GHCR image path segments must be lowercase.
+          RAW_IMAGE_NAME="${RAW_IMAGE_NAME,,}"
+
+          # Trim surrounding whitespace and slashes from caller input.
+          RAW_IMAGE_NAME="$(echo "$RAW_IMAGE_NAME" | xargs)"
+          RAW_IMAGE_NAME="${RAW_IMAGE_NAME#/}"
+          RAW_IMAGE_NAME="${RAW_IMAGE_NAME%/}"
+
+          # Accept caller values like ghcr.io/org/repo, org/repo, or repo.
+          RAW_IMAGE_NAME="${RAW_IMAGE_NAME#ghcr.io/}"
+
+          OWNER_PREFIX="${{ github.repository_owner }}/"
+          OWNER_PREFIX="${OWNER_PREFIX,,}"
+          while [[ "$RAW_IMAGE_NAME" == "$OWNER_PREFIX"* ]]; do
+            RAW_IMAGE_NAME="${RAW_IMAGE_NAME#${OWNER_PREFIX}}"
+          done
+
+          echo "image_name=$RAW_IMAGE_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ steps.resolve-image.outputs.image_name }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=sha,format=short
+
+      - name: Compose Docker tags
+        id: compose-tags
+        shell: bash
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ steps.resolve-image.outputs.image_name }}"
+          CANONICAL_TAG="${{ inputs.image_tag }}"
+
+          {
+            echo "tags<<EOF"
+            if [ -n "$CANONICAL_TAG" ]; then
+              echo "${IMAGE}:${CANONICAL_TAG}"
+            fi
+            echo "${{ steps.meta.outputs.tags }}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and Push Docker Image
+        id: build-and-push
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ${{ steps.find-dockerfile.outputs.dockerfile_path }}
+          push: true
+          tags: ${{ steps.compose-tags.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          secrets: |
+            github_token=${{ secrets.PACKAGE_READER_PAT_TOKEN != '' && secrets.PACKAGE_READER_PAT_TOKEN || steps.package-reader-token-docker.outputs.token }}
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ steps.resolve-image.outputs.image_name }}
+          subject-digest: ${{ steps.build-and-push.outputs.digest }}
+          push-to-registry: true
+
+  deploy_dev:
+    name: Deploy to DEV
+
+    runs-on: 
+      group: CHQ
+      labels: linux
+    #runs-on: ubuntu-latest
+
+    needs: [ keeper, containerize ]
+
+    steps:
+      - name: Checkout Source Code Repository
+        uses: actions/checkout@v7
+        with:
+          path: source
+
+      - name: Checkout github-actions Repository
+        uses: actions/checkout@v7
+        with:
+          repository: xplor-pay/github-actions
+          ref: main
+          path: .github-actions-repo
+
+      - name: Install Rancher CLI Tools
+        shell: bash
+        run: | 
+          if [ ! -f /usr/local/bin/rancher ]; then
+            wget -O rancher.tar.gz https://github.com/rancher/cli/releases/download/v0.6.8/rancher-linux-amd64-v0.6.8.tar.gz
+            sudo tar -xvf rancher.tar.gz
+            sudo mv rancher-v0.6.8/rancher /usr/local/bin
+          fi
+          
+          if [ ! -f /usr/local/bin/rancher-compose ]; then
+            wget -O rancher-compose.tar.gz https://github.com/rancher/rancher-compose/releases/download/v0.12.5/rancher-compose-linux-amd64-v0.12.5.tar.gz
+            sudo tar -xvf rancher-compose.tar.gz
+            sudo mv rancher-compose-v0.12.5/rancher-compose /usr/local/bin
+          fi
+
+      - name: Discover compose files for deployment
+        shell: bash
+        run: | 
+          #!/bin/bash
+          set -e
+
+          workspace="$GITHUB_WORKSPACE"
+          source_dir="$workspace/source"
+          templates_dir="$workspace/.github-actions-repo/rancher/compose"
+          staging_dir="$workspace/staging"
+
+          if [[ $APPLICATION_TYPE = "cron_job" ]]; then
+            compose_template="schedule-once"
+          else
+            compose_template="generic"
+          fi
+
+          mkdir -p "${staging_dir}"
+
+          # Use the compose files from the app repo, if exists. Otherwise, use shared templates
+          if [ -f "${source_dir}/docker-compose.yml" ] || [ -f "${source_dir}/docker-compose.yml.tmpl" ]; then
+            cp --verbose "${source_dir}/docker-compose.yml" "${staging_dir}/docker-compose.yml" ||
+            cp --verbose "${source_dir}/docker-compose.yml.tmpl" "${staging_dir}/docker-compose.yml"
+          else
+            cp --verbose "${templates_dir}/${compose_template}/docker-compose.yml" "${staging_dir}/docker-compose.yml"
+          fi
+
+          if [ -f "${source_dir}/rancher-compose.yml" ] || [ -f "${source_dir}/rancher-compose.yml.tmpl" ]; then
+            cp --verbose "${source_dir}/rancher-compose.yml" "${staging_dir}/rancher-compose.yml" ||
+              cp --verbose "${source_dir}/rancher-compose.yml.tmpl" "${staging_dir}/rancher-compose.yml"
+          else
+            cp --verbose "${templates_dir}/${compose_template}/rancher-compose.yml" "${staging_dir}/rancher-compose.yml"
+          fi
+
+      - name: Replace tokens in compose file
+        uses: qetza/replacetokens-action@78be0760a482930501bc80465505fe274a5a620d
+        with:
+          sources: |
+            docker-compose.yml
+            rancher-compose.yml
+          token-pattern: 'custom'
+          token-prefix: '${'
+          token-suffix: '}'
+          variables: >
+            [
+              "$REGISTRY_NAME",
+              "$SERVICE_NAME",
+              "$SERVICE_ENV",
+              "$IMAGE_VERSION",
+              "$IMAGE_TAG",
+              "$SCALE",
+              "$TRUST_STORE",
+              "$TRUST_PASSWORD",
+              "$JAVA_OPTIONS",
+              "$RANCHER_STACK_NAME",
+              "$CRON_EXPRESSION"
+            ]
+          no-telemetry: 'true'
+          add-bom: false
+          if-no-files-found: 'warn'
+        env:
+          REGISTRY_NAME: ${{ env.REGISTRY }}
+          SERVICE_NAME: ${{ inputs.rancher_service_name }}
+          SERVICE_ENV: ${{ inputs.rancher_service_environment }}
+          IMAGE_VERSION: ${{ inputs.image_tag }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          SCALE: ${{ inputs.container_scale }}
+          # These TRUST_* vars are defaults. Overridden when one of the 'Java Trust Store' variable groups are referenced, e.g. in Rancher production environments
+          TRUST_STORE: ${{ inputs.trust_store }}
+          TRUST_PASSWORD: ${{ inputs.trust_password }}
+          JAVA_OPTIONS: ${{ inputs.java_options }}
+          RANCHER_STACK_NAME: ${{ inputs.rancher_stack_name }}
+          CRON_EXPRESSION: ${{ inputs.cron_expression }}
+
+      - name: Log the contents of the compose file for troubleshooting
+        shell: bash
+        run: |
+          imageTag="${{ inputs.image_tag }}"
+          trustPassword="${{ inputs.trust_password }}"
+
+          if [[ "${imageTag}" = 'undefined' ]]; then
+            echo "::warning::The container image tag is not specified. Either run the build stage to generate a new image or specify an existing tag via the workflow input."
+            echo "::error::Container image tag not specified"
+            exit 1
+          else
+            echo "Deploying image tag ${imageTag}"
+          fi
+
+          if [[ -n "${trustPassword}" ]]; then
+            echo "::add-mask::${trustPassword}"
+          fi
+
+          echo; echo "Files in staging dir:"
+          ls -l
+
+          echo; echo "Deploying the following manifests to Rancher:"
+          shopt -s nullglob
+          for manifest in *.{yml,yaml}; do
+            echo; echo "==== $manifest ===="
+            sed -E 's/^([[:space:]]*[^:#]*(_PASSWORD|PASSWORD|PASSWD|TOKEN|SECRET):).*/\1 [REDACTED]/I' "$manifest"
+            echo
+          done
+
+      # Restart tequila on all nodes to ensure latest configs are pulled
+      - name: Restart tequila
+        shell: pwsh
+        run: |
+          & "${{ github.workspace }}/.github-actions-repo/rancher/restart_tequila.ps1"
+        env:
+          RANCHER_ACCESS_KEY: ${{ needs.keeper.outputs.RANCHER_ACCESS_KEY }}
+          RANCHER_SECRET_KEY: ${{ needs.keeper.outputs.RANCHER_SECRET_KEY }}
+          RANCHER_URL: ${{ needs.keeper.outputs.RANCHER_URL }}
+
+      # List existing running services in case of rollback
+      - name: List existing running services in case of rollback
+        shell: bash
+        run: |
+          /usr/local/bin/rancher --url "$RANCHER_URL" --access-key "$RANCHER_ACCESS_KEY" --secret-key "$RANCHER_SECRET_KEY" ps --format '{{.Service.Name}} {{.Service.LaunchConfig.ImageUuid}}'
+        env:
+          RANCHER_ACCESS_KEY: ${{ needs.keeper.outputs.RANCHER_ACCESS_KEY }}
+          RANCHER_SECRET_KEY: ${{ needs.keeper.outputs.RANCHER_SECRET_KEY }}
+          RANCHER_URL: ${{ needs.keeper.outputs.RANCHER_URL }}
+        continue-on-error: true
+
+      # Upgrade service in Rancher via rancher-compose
+      - name: Upgrade service in Rancher
+        shell: bash
+        run: |
+          /usr/local/bin/rancher-compose --debug --url "$RANCHER_URL" --access-key "$RANCHER_ACCESS_KEY" --secret-key "$RANCHER_SECRET_KEY" --project-name "$RANCHER_STACK_NAME" up --force-upgrade --batch-size "1" --confirm-upgrade -d
+        env:
+          RANCHER_ACCESS_KEY: ${{ needs.keeper.outputs.RANCHER_ACCESS_KEY }}
+          RANCHER_SECRET_KEY: ${{ needs.keeper.outputs.RANCHER_SECRET_KEY }}
+          RANCHER_URL: ${{ needs.keeper.outputs.RANCHER_URL }}
+          RANCHER_STACK_NAME: ${{ inputs.rancher_stack_name }}
+        working-directory: ${{ github.workspace }}/staging
+        

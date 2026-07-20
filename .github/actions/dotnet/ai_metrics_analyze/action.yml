@@ -10,25 +10,25 @@ runs:
 
   steps:
 
-    - name: AI Metrics - Run Xplor.AI.Metrics.BuildTool - Start
+    - name: AI Metrics - Run AI Metrics Tool - Start
       shell: bash
       run: |
-        echo "::notice::Step 3 - AI Metrics - Run Xplor.AI.Metrics.BuildTool..."
+        echo "::notice::Step 4 - AI Metrics - Run AI Metrics Tool $AI_METRICS_PACKAGE_REPOSITORY ..."
 
-    - name: AI Metrics - Run Xplor.AI.Metrics.BuildTool
+    - name: AI Metrics - Run AI Metrics Tool
       shell: bash
       run: |
         set -euo pipefail
 
-        echo "AI Metrics - Run Xplor.AI.Metrics.BuildTool"
+        echo "AI Metrics - Run AI Metrics Tool $AI_METRICS_PACKAGE_REPOSITORY"
 
         TOOL_PATH="${TOOL_PATH:-${RUNNER_TEMP}/tools}"
-        if command -v Xplor.AI.Metrics.BuildTool >/dev/null 2>&1; then
-          BUILD_TOOL="$(command -v Xplor.AI.Metrics.BuildTool)"
-        elif [ -x "$TOOL_PATH/Xplor.AI.Metrics.BuildTool" ]; then
-          BUILD_TOOL="$TOOL_PATH/Xplor.AI.Metrics.BuildTool"
+        if command -v $AI_METRICS_PACKAGE_REPOSITORY >/dev/null 2>&1; then
+          BUILD_TOOL="$(command -v $AI_METRICS_PACKAGE_REPOSITORY)"
+        elif [ -x "$TOOL_PATH/$AI_METRICS_PACKAGE_REPOSITORY" ]; then
+          BUILD_TOOL="$TOOL_PATH/$AI_METRICS_PACKAGE_REPOSITORY"
         else
-          echo "::error::Xplor.AI.Metrics.BuildTool was not found on PATH or at $TOOL_PATH. Run the install action before analyze."
+          echo "::error::$AI_METRICS_PACKAGE_REPOSITORY was not found on PATH or at $TOOL_PATH. Run the install action before analyze."
           exit 1
         fi
 
@@ -48,14 +48,14 @@ runs:
         cd "${{ runner.workspace }}"
         ls -lah
 
-        echo "AI Metrics - Run Xplor.AI.Metrics.BuildTool completed successfully"
+        echo "AI Metrics - Run AI Metrics Tool $AI_METRICS_PACKAGE_REPOSITORY completed successfully"
 
-    - name: AI Metrics - Run Xplor.AI.Metrics.BuildTool - End
+    - name: AI Metrics - Run AI Metrics Tool - End
       if: ${{ always() }}
       shell: bash
       run: |
         if [ "${{ job.status }}" = "success" ]; then
-          echo "::notice::Step 3 - AI Metrics - Run Xplor.AI.Metrics.BuildTool completed successfully."
+          echo "::notice::Step 4 - AI Metrics - Run AI Metrics Tool $AI_METRICS_PACKAGE_REPOSITORY completed successfully."
         else
-          echo "::warning::Step 3 - AI Metrics - Run Xplor.AI.Metrics.BuildTool finished with status: ${{ job.status }}"
+          echo "::warning::Step 4 - AI Metrics - Run AI Metrics Tool $AI_METRICS_PACKAGE_REPOSITORY finished with status: ${{ job.status }}"
         fi

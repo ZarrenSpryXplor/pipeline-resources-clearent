@@ -31,7 +31,7 @@ runs:
     - name: AI Metrics - Publish AI Metrics to Azure Storage - Start
       shell: bash
       run: |
-        echo "::notice::Step 4 - AI Metrics - Publish AI Metrics to Azure Storage..."
+        echo "::notice::Step 5 - AI Metrics - Publish AI Metrics to Azure Storage..."
 
     - name: AI Metrics - Publish AI Metrics to Azure Storage
       continue-on-error: true
@@ -70,7 +70,7 @@ runs:
         # Upload the primary AI Metrics XML files produced from the solution name.
         $files = Get-ChildItem -Path . -Filter "${fileNm}*.xml" -File
 
-        Write-Host "Step 4 - AI Metrics local files found: $files"
+        Write-Host "Step 5 - AI Metrics local files found: $files"
 
         $azcopyPath = "${{ runner.workspace }}/tools/azcopy"
 
@@ -83,7 +83,7 @@ runs:
 
                 # Copy to the temp location so each upload uses a stable path.
                 Copy-Item -Path $file.FullName -Destination $tempFilePath -Force
-                Write-Host "Step 4 - Copied $file to temp location: $tempFilePath"
+                Write-Host "Step 5 - Copied $file to temp location: $tempFilePath"
 
                 Write-Host "Uploading $tempFilePath to https://$computer/$containerName/$aiPath/$fileName"
 
@@ -99,10 +99,10 @@ runs:
 
                 # Copy to the temp location so the final remote name matches the upload target.
                 Copy-Item -Path $file.FullName -Destination $tempFilePath -Force
-                Write-Host "Step 4 - Copied $file to temp location: $tempFilePath"
+                Write-Host "Step 5 - Copied $file to temp location: $tempFilePath"
 
                 $fileName = Split-Path -Path $file -Leaf
-                Write-Host "Step 4 - Rename $coveragePath$fileName to $remoteNm"
+                Write-Host "Step 5 - Rename $coveragePath$fileName to $remoteNm"
 
                 . "$azcopyPath" cp "$tempFilePath" "https://$computer/$containerName/$coveragePath/$remoteNm`?$sasKey" --overwrite=true --log-level DEBUG
                 $iterator++;
@@ -128,15 +128,15 @@ runs:
       shell: bash
       run: |
         if [ "${{ job.status }}" = "success" ]; then
-          echo "::notice::Step 4 - AI Metrics - Publish to Azure Storage completed successfully."
+          echo "::notice::Step 5 - AI Metrics - Publish to Azure Storage completed successfully."
         else
-          echo "::warning::Step 4 - AI Metrics - Publish to Azure Storage finished with status: ${{ job.status }}"
+          echo "::warning::Step 5 - AI Metrics - Publish to Azure Storage finished with status: ${{ job.status }}"
         fi
 
     - name: AI Metrics - Publish AZCopy Logs as Build Artifacts - Start
       shell: bash
       run: |
-        echo "::notice::Step 5 - AI Metrics - Publish AZCopy Logs as Build Artifacts..."
+        echo "::notice::Step 6 - AI Metrics - Publish AZCopy Logs as Build Artifacts..."
 
     - name: AI Metrics - Publish AZCopy Logs as Build Artifacts
       continue-on-error: true
@@ -151,7 +151,7 @@ runs:
       shell: bash
       run: |
         if [ "${{ job.status }}" = "success" ]; then
-          echo "::notice::Step 5 - AI Metrics - Publish AZCopy Logs as Build Artifacts completed successfully."
+          echo "::notice::Step 6 - AI Metrics - Publish AZCopy Logs as Build Artifacts completed successfully."
         else
-          echo "::warning::Step 5 - AI Metrics - Publish AZCopy Logs as Build Artifacts finished with status: ${{ job.status }}"
+          echo "::warning::Step 6 - AI Metrics - Publish AZCopy Logs as Build Artifacts finished with status: ${{ job.status }}"
         fi

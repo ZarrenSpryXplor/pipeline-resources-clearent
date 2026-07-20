@@ -1,0 +1,65 @@
+name: Rancher Service Upgrade
+description: Upgrade a Rancher service to a new Docker image with auditable logging and retry-based state checks.
+
+inputs:
+  rancher_url:
+    description: The base Rancher URL.
+    required: true
+  rancher_access:
+    description: Rancher access key.
+    required: true
+  rancher_key:
+    description: Rancher secret key.
+    required: true
+  project_id:
+    description: Rancher project identifier.
+    required: true
+  stack_name:
+    description: Rancher stack name.
+    required: true
+  service_name:
+    description: Rancher service name.
+    required: true
+  docker_image:
+    description: Target Docker image reference.
+    required: true
+  retry_count:
+    description: Number of polling attempts while waiting for Rancher state transitions.
+    required: false
+    default: '10'
+  retry_delay:
+    description: Delay in seconds between polling attempts.
+    required: false
+    default: '5'
+
+outputs:
+  result:
+    description: Indicates whether the Rancher upgrade completed successfully.
+    value: ${{ steps.rancher.outputs.result }}
+  stack_id:
+    description: The resolved Rancher stack identifier.
+    value: ${{ steps.rancher.outputs.stack_id }}
+  service_id:
+    description: The resolved Rancher service identifier.
+    value: ${{ steps.rancher.outputs.service_id }}
+  image_uuid:
+    description: The Docker image UUID applied to the service.
+    value: ${{ steps.rancher.outputs.image_uuid }}
+
+runs:
+  using: composite
+  steps:
+    - name: Upgrade Rancher service
+      id: rancher
+      shell: pwsh
+      run: |
+        & "${{ github.action_path }}/main.ps1" `
+          -RancherUrl "${{ inputs.rancher_url }}" `
+          -RancherAccess "${{ inputs.rancher_access }}" `
+          -RancherKey "${{ inputs.rancher_key }}" `
+          -ProjectId "${{ inputs.project_id }}" `
+          -StackName "${{ inputs.stack_name }}" `
+          -ServiceName "${{ inputs.service_name }}" `
+          -DockerImage "${{ inputs.docker_image }}" `
+          -RetryCount ${{ inputs.retry_count }} `
+          -RetryDelay ${{ inputs.retry_delay }}

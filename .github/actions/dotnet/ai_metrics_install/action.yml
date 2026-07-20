@@ -10,12 +10,46 @@ runs:
 
   steps:
 
-    - name: AI Metrics - Install Xplor.AI.Metrics.BuildTool - Start
+    - name: AI Metrics - Validate AI Metrics Repository - Start
       shell: bash
       run: |
-        echo "::notice::Step 1 - AI Metrics - Install Xplor.AI.Metrics.BuildTool..."
+        echo "::notice::Step 1 - AI Metrics - Validate AI Metrics Repository $AI_METRICS_PACKAGE_REPOSITORY ..."
 
-    - name: AI Metrics - Install Xplor.AI.Metrics.BuildTool
+    - name: AI Metrics - Validate AI Metrics Repository
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        INPUT="$AI_METRICS_PACKAGE_REPOSITORY"
+
+        # Allow only alphanumeric, dots, hyphens, and underscores (NuGet package ID chars)
+        if ! [[ "$INPUT" =~ ^[A-Za-z0-9._-]+$ ]]; then
+          echo "::error::ai_metrics_package_repository contains invalid characters: '$INPUT'"
+          exit 1
+        fi
+
+        # Optionally enforce it must start with your org prefix
+        if [[ "$INPUT" != Xplor.* ]]; then
+          echo "::error::ai_metrics_package_repository must be an Xplor.* package, got: '$INPUT'"
+          exit 1
+        fi
+
+    - name: AI Metrics - Validate AI Metrics Repository - End
+      if: ${{ always() }}
+      shell: bash
+      run: |
+        if [ "${{ job.status }}" = "success" ]; then
+          echo "::notice::Step 1 - AI Metrics - Validate AI Metrics Repository $AI_METRICS_PACKAGE_REPOSITORY completed successfully."
+        else
+          echo "::warning::Step 1 - AI Metrics - Validate AI Metrics Repository $AI_METRICS_PACKAGE_REPOSITORY finished with status: ${{ job.status }}"
+        fi
+
+    - name: AI Metrics - Install AI Metrics Tool - Start
+      shell: bash
+      run: |
+        echo "::notice::Step 2 - AI Metrics - Install AI Metrics Tool $AI_METRICS_PACKAGE_REPOSITORY ..."
+
+    - name: AI Metrics - Install AI Metrics Tool
       shell: bash
       run: |
         set -euo pipefail
@@ -26,31 +60,31 @@ runs:
         echo "$TOOL_PATH" >> "$GITHUB_PATH"
 
         # First try update (works if already installed), then install if not present.
-        dotnet tool update Xplor.AI.Metrics.BuildTool \
+        dotnet tool update $AI_METRICS_PACKAGE_REPOSITORY \
           --version "$AI_METRICS_PACKAGE_VERSION" \
           --tool-path "$TOOL_PATH" \
           --configfile "./nuget.config" \
           --ignore-failed-sources \
-        || dotnet tool install Xplor.AI.Metrics.BuildTool \
+        || dotnet tool install $AI_METRICS_PACKAGE_REPOSITORY \
           --version "$AI_METRICS_PACKAGE_VERSION" \
           --tool-path "$TOOL_PATH" \
           --configfile "./nuget.config" \
           --ignore-failed-sources
 
-    - name: AI Metrics - Install Xplor.AI.Metrics.BuildTool - End
+    - name: AI Metrics - Install AI Metrics Tool - End
       if: ${{ always() }}
       shell: bash
       run: |
         if [ "${{ job.status }}" = "success" ]; then
-          echo "::notice::Step 1 - AI Metrics - Install Xplor.AI.Metrics.BuildTool completed successfully."
+          echo "::notice::Step 2 - AI Metrics - Install AI Metrics Tool $AI_METRICS_PACKAGE_REPOSITORY completed successfully."
         else
-          echo "::warning::Step 1 - AI Metrics - Install Xplor.AI.Metrics.BuildTool finished with status: ${{ job.status }}"
+          echo "::warning::Step 2 - AI Metrics - Install AI Metrics Tool $AI_METRICS_PACKAGE_REPOSITORY finished with status: ${{ job.status }}"
         fi
 
     - name: AI Metrics - Install AZCopy - Start
       shell: bash
       run: |
-        echo "::notice::Step 2 - AI Metrics - Install AZCopy..."
+        echo "::notice::Step 3 - AI Metrics - Install AZCopy..."
 
     - name: AI Metrics - Install AZCopy
       shell: pwsh
@@ -115,7 +149,7 @@ runs:
       shell: bash
       run: |
         if [ "${{ job.status }}" = "success" ]; then
-          echo "::notice::Step 2 - AI Metrics - Install AZCopy completed successfully."
+          echo "::notice::Step 3 - AI Metrics - Install AZCopy completed successfully."
         else
-          echo "::warning::Step 2 - AI Metrics - Install AZCopy finished with status: ${{ job.status }}"
+          echo "::warning::Step 3 - AI Metrics - Install AZCopy finished with status: ${{ job.status }}"
         fi

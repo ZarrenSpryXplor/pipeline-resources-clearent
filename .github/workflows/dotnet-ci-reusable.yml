@@ -31,7 +31,7 @@ on:
         description: Repository that owns the Xplor.AI.Metrics.BuildTool package.
         required: false
         type: string
-        default: Xplor.AI.Metrics.BuildTool
+        default: "Xplor.AI.Metrics.BuildTool"
 
       ai_metrics_package_version:
         description: Version of Xplor.AI.Metrics.BuildTool to install.
@@ -278,6 +278,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PACKAGE_READER_PAT_TOKEN }}
           GITHUB_ORG: ${{ github.repository_owner }}
           AI_METRICS_PACKAGE_VERSION: ${{ inputs.ai_metrics_package_version }}
+          AI_METRICS_PACKAGE_REPOSITORY: ${{ inputs.ai_metrics_package_repository }}
         with:
           sftp_server: ${{ secrets.AI_METRICS_SFTP_SERVER }}
           ai_path: ${{ vars.AI_METRICS_AI_PATH}}

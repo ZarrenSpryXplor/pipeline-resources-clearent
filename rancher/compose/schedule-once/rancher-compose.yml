@@ -1,0 +1,4 @@
+${SERVICE_NAME}:
+  scale: ${SCALE}
+  upgrade_strategy:
+    start_first: true
