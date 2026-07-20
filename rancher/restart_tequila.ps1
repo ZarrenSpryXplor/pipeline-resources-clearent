@@ -1,14 +1,28 @@
+$required = @('RANCHER_URL', 'RANCHER_ACCESS_KEY', 'RANCHER_SECRET_KEY')
+foreach ($name in $required) {
+    if ([string]::IsNullOrWhiteSpace([string](Get-Item -Path "env:$name" -ErrorAction SilentlyContinue).Value)) {
+        throw "Required environment variable '$name' is empty or missing."
+    }
+}
+
+$serviceName = if ([string]::IsNullOrWhiteSpace($env:RANCHER_SERVICE_NAME)) { 'tequila' } else { $env:RANCHER_SERVICE_NAME }
+$targetProjectId = $env:RANCHER_PROJECT_ID
+$targetState = 'started-once'
+$maxAttempts = 60
+$pollDelaySeconds = 5
+
 $PWord = ConvertTo-SecureString -String $env:RANCHER_SECRET_KEY -AsPlainText -Force
 $credential = New-Object System.Management.Automation.PSCredential -ArgumentList ($env:RANCHER_ACCESS_KEY, $PWord)
 
-function Invoke-RancherRequest {
+function Invoke-RancherApi {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Uri
+        [string]$Uri,
+        [string]$Method = 'Get'
     )
 
     try {
-        return Invoke-RestMethod -Uri $Uri -Credential $credential -Headers @{"Accept"="application/json"}
+        return Invoke-RestMethod -Uri $Uri -Credential $credential -Headers @{ "Accept" = "application/json" } -Method $Method -ContentType "application/json"
     }
     catch {
         $statusCode = $_.Exception.Response.StatusCode.value__
@@ -23,64 +37,64 @@ function Invoke-RancherRequest {
     }
 }
 
-$projects = Invoke-RancherRequest -Uri "$env:RANCHER_URL/v2-beta/projects"
-
-Write-Host "Projects payload:"
-$projects | ConvertTo-Json -Depth 10
+$projects = Invoke-RancherApi -Uri "$env:RANCHER_URL/v2-beta/projects"
 
 if (-not $projects.data -or $projects.data.Count -eq 0) {
-    throw "No Rancher projects were returned by /v2-beta/projects."
+    throw "No projects returned from Rancher."
 }
 
-Write-Host "Project summary:"
-$projects.data | Select-Object id, name, state | Format-Table -AutoSize
+if ([string]::IsNullOrWhiteSpace($targetProjectId)) {
+    if ($projects.data.Count -ne 1) {
+        $availableIds = ($projects.data | ForEach-Object { $_.id }) -join ', '
+        throw "RANCHER_PROJECT_ID is required because multiple projects are available: $availableIds"
+    }
+    $targetProjectId = $projects.data[0].id
+}
 
-$projectId = $projects.data[0].id
-Write-Host "Selected projectId: $projectId"
+Write-Host "Using project: $targetProjectId"
 
-$services = Invoke-RancherRequest -Uri "$env:RANCHER_URL/v2-beta/projects/$projectId/services/?name=tequila"
-
+$services = Invoke-RancherApi -Uri "$env:RANCHER_URL/v2-beta/projects/$targetProjectId/services/?name=$serviceName"
 if (-not $services.data -or $services.data.Count -eq 0) {
-    throw "No service named 'tequila' was found in project '$projectId'."
+    throw "No service named '$serviceName' found in project '$targetProjectId'."
 }
 
 $service = $services.data[0].id
+Write-Host "Using service: $service"
 
-$containers = Invoke-RestMethod -Uri $env:RANCHER_URL/v2-beta/projects/$projectId/services/$service/instances -Credential $credential -Headers @{"Accept"="application/json"}
+$containers = Invoke-RancherApi -Uri "$env:RANCHER_URL/v2-beta/projects/$targetProjectId/services/$service/instances"
 
-foreach ($container in $containers.data) 
-{
+foreach ($container in $containers.data) {
     $containerId = $container.id
-    
-    if ($container.state -eq "stopped") 
-    {
-        Write-Host Invoking $env:RANCHER_URL/v2-beta/projects/$projectId/containers/$containerId/?action=start
-        
-        Invoke-RestMethod -Uri $env:RANCHER_URL/v2-beta/projects/$projectId/containers/$containerId/?action=start -Credential $credential -ContentType "application/json" -Headers @{"Accept"="application/json"} -Method Post | Out-Null
+    if ($container.state -eq 'stopped') {
+        Write-Host "Invoking $env:RANCHER_URL/v2-beta/projects/$targetProjectId/containers/$containerId/?action=start"
+        Invoke-RancherApi -Uri "$env:RANCHER_URL/v2-beta/projects/$targetProjectId/containers/$containerId/?action=start" -Method 'Post' | Out-Null
     }
 }
 
-#poll until containers are done restarting
-$allDone = $false
+# Poll until all containers reach Started-Once.
+$attempt = 0
+do {
+    $attempt++
+    Start-Sleep -Seconds $pollDelaySeconds
 
-do 
-{
-    Start-Sleep -Seconds 5
-    
     $allDone = $true
-    
-    $containers = Invoke-RestMethod -Uri $env:RANCHER_URL/v2-beta/projects/$projectId/services/$service/instances -Credential $credential -Headers @{"Accept"="application/json"}
-    
-    foreach ($container in $containers.data) 
-    {
-        $containerId = $container.id
+    $containers = Invoke-RancherApi -Uri "$env:RANCHER_URL/v2-beta/projects/$targetProjectId/services/$service/instances"
 
-        if($container.state -ne "stopped") 
-        {
+    foreach ($container in $containers.data) {
+        if ($container.state -ine $targetState) {
             $allDone = $false
+            break
         }
     }
-    
-    Write-Host "Not all hosts have finished pulling configs...waiting..."
-} 
-until ($allDone)
+
+    if (-not $allDone) {
+        Write-Host "Attempt $attempt/${maxAttempts}: not all instances are '$targetState' yet..."
+    }
+}
+until ($allDone -or $attempt -ge $maxAttempts)
+
+if (-not $allDone) {
+    throw "Timed out waiting for all instances to reach '$targetState' after $maxAttempts attempts."
+}
+
+Write-Host "All instances reached '$targetState'."
