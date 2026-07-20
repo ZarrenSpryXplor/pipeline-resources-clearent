@@ -93,8 +93,8 @@ jobs:
           keeper-secret-config: ${{ secrets.RANCHER1_LAUNCH_DEV }}
           secrets: |
             Rancher/field/url > RANCHER_URL
-            Rancher/field/Access Key > RANCHER_ACCESS_KEY
-            Rancher/field/Secret Key > RANCHER_SECRET_KEY
+            Rancher/custom_field/Access Key > RANCHER_ACCESS_KEY
+            Rancher/custom_field/Secret Key > RANCHER_SECRET_KEY
 
       - name: Keeper Vault Connectivity Verification
         env:
