@@ -7,7 +7,7 @@ foreach ($name in $required) {
 
 $serviceName = if ([string]::IsNullOrWhiteSpace($env:RANCHER_SERVICE_NAME)) { 'tequila' } else { $env:RANCHER_SERVICE_NAME }
 $targetProjectId = $env:RANCHER_PROJECT_ID
-$targetState = 'started-once'
+$targetState = 'stopped'
 $maxAttempts = 60
 $pollDelaySeconds = 5
 
