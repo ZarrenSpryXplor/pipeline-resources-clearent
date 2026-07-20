@@ -80,15 +80,16 @@ do {
     $allDone = $true
     $containers = Invoke-RancherApi -Uri "$env:RANCHER_URL/v2-beta/projects/$targetProjectId/services/$service/instances"
 
-    foreach ($container in $containers.data) {
-        if ($container.state -ine $targetState) {
-            $allDone = $false
-            break
-        }
+    $nonTargetContainers = @($containers.data | Where-Object { $_.state -ine $targetState })
+    if ($nonTargetContainers.Count -gt 0) {
+        $allDone = $false
     }
 
     if (-not $allDone) {
-        Write-Host "Attempt $attempt/${maxAttempts}: not all instances are '$targetState' yet..."
+        $stateSummary = ($nonTargetContainers |
+            Group-Object -Property state |
+            ForEach-Object { "$($_.Name)=$($_.Count)" }) -join ', '
+        Write-Host "Attempt $attempt/${maxAttempts}: waiting for '$targetState'. Current non-target states: $stateSummary"
     }
 }
 until ($allDone -or $attempt -ge $maxAttempts)
