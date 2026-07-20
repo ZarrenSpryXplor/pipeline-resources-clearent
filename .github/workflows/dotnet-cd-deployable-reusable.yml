@@ -363,36 +363,24 @@ jobs:
           token-pattern: 'custom'
           token-prefix: '${'
           token-suffix: '}'
-          variables: >
-            [
-              "$REGISTRY_NAME",
-              "$SERVICE_NAME",
-              "$SERVICE_ENV",
-              "$IMAGE_VERSION",
-              "$IMAGE_TAG",
-              "$SCALE",
-              "$TRUST_STORE",
-              "$TRUST_PASSWORD",
-              "$JAVA_OPTIONS",
-              "$RANCHER_STACK_NAME",
-              "$CRON_EXPRESSION"
-            ]
+          # These TRUST_* vars are defaults. Overridden when one of the 'Java Trust Store' variable groups are referenced, e.g. in Rancher production environments
+          variables: >-
+            {
+              "REGISTRY_NAME": "${{ env.REGISTRY }}",
+              "SERVICE_NAME": "${{ inputs.rancher_service_name }}",
+              "SERVICE_ENV": "${{ inputs.rancher_service_environment }}",
+              "IMAGE_VERSION": "${{ inputs.image_tag }}",
+              "IMAGE_TAG": "${{ inputs.image_tag }}",
+              "SCALE": "${{ inputs.container_scale }}",
+              "TRUST_STORE": "${{ inputs.trust_store }}",
+              "TRUST_PASSWORD": "${{ inputs.trust_password }}",
+              "JAVA_OPTIONS": "${{ inputs.java_options }}",
+              "RANCHER_STACK_NAME": "${{ inputs.rancher_stack_name }}",
+              "CRON_EXPRESSION": "${{ inputs.cron_expression }}"
+            }
           no-telemetry: 'true'
           add-bom: false
           if-no-files-found: 'warn'
-        env:
-          REGISTRY_NAME: ${{ env.REGISTRY }}
-          SERVICE_NAME: ${{ inputs.rancher_service_name }}
-          SERVICE_ENV: ${{ inputs.rancher_service_environment }}
-          IMAGE_VERSION: ${{ inputs.image_tag }}
-          IMAGE_TAG: ${{ inputs.image_tag }}
-          SCALE: ${{ inputs.container_scale }}
-          # These TRUST_* vars are defaults. Overridden when one of the 'Java Trust Store' variable groups are referenced, e.g. in Rancher production environments
-          TRUST_STORE: ${{ inputs.trust_store }}
-          TRUST_PASSWORD: ${{ inputs.trust_password }}
-          JAVA_OPTIONS: ${{ inputs.java_options }}
-          RANCHER_STACK_NAME: ${{ inputs.rancher_stack_name }}
-          CRON_EXPRESSION: ${{ inputs.cron_expression }}
 
       - name: Log the contents of the compose file for troubleshooting
         shell: bash
