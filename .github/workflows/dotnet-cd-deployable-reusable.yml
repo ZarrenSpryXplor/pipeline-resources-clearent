@@ -303,6 +303,7 @@ jobs:
           repository: xplor-pay/github-actions
           ref: main
           path: .github-actions-repo
+          token: ${{ secrets.PACKAGE_READER_PAT_TOKEN }}
 
       - name: Install Rancher CLI Tools
         shell: bash
