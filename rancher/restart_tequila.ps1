@@ -1,11 +1,50 @@
 $PWord = ConvertTo-SecureString -String $env:RANCHER_SECRET_KEY -AsPlainText -Force
 $credential = New-Object System.Management.Automation.PSCredential -ArgumentList ($env:RANCHER_ACCESS_KEY, $PWord)
 
-$projects = Invoke-RestMethod -Uri $env:RANCHER_URL/v2-beta/projects -Credential $credential -Headers @{"Accept"="application/json"}
-$projectId = $projects[0].data.id
+function Invoke-RancherRequest {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Uri
+    )
 
-$services = Invoke-RestMethod -Uri $env:RANCHER_URL/v2-beta/projects/$projectId/services/?name=tequila -Credential $credential -Headers @{"Accept"="application/json"}
-$service = $services[0].data.id
+    try {
+        return Invoke-RestMethod -Uri $Uri -Credential $credential -Headers @{"Accept"="application/json"}
+    }
+    catch {
+        $statusCode = $_.Exception.Response.StatusCode.value__
+        $reasonPhrase = $_.Exception.Response.ReasonPhrase
+        Write-Host "Rancher API request failed: $statusCode $reasonPhrase"
+        Write-Host "Request URI: $Uri"
+        if ($_.ErrorDetails.Message) {
+            Write-Host "Response body:"
+            Write-Host $_.ErrorDetails.Message
+        }
+        throw
+    }
+}
+
+$projects = Invoke-RancherRequest -Uri "$env:RANCHER_URL/v2-beta/projects"
+
+Write-Host "Projects payload:"
+$projects | ConvertTo-Json -Depth 10
+
+if (-not $projects.data -or $projects.data.Count -eq 0) {
+    throw "No Rancher projects were returned by /v2-beta/projects."
+}
+
+Write-Host "Project summary:"
+$projects.data | Select-Object id, name, state | Format-Table -AutoSize
+
+$projectId = $projects.data[0].id
+Write-Host "Selected projectId: $projectId"
+
+$services = Invoke-RancherRequest -Uri "$env:RANCHER_URL/v2-beta/projects/$projectId/services/?name=tequila"
+
+if (-not $services.data -or $services.data.Count -eq 0) {
+    throw "No service named 'tequila' was found in project '$projectId'."
+}
+
+$service = $services.data[0].id
 
 $containers = Invoke-RestMethod -Uri $env:RANCHER_URL/v2-beta/projects/$projectId/services/$service/instances -Credential $credential -Headers @{"Accept"="application/json"}
 
