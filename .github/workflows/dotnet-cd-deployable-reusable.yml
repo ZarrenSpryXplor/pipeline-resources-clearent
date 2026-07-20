@@ -250,6 +250,7 @@ jobs:
           repository: xplor-pay/github-actions
           ref: main
           path: .github-actions-repo
+          token: ${{ secrets.PACKAGE_READER_PAT_TOKEN }}
 
       - name: Fetch Rancher URL from Keeper Vault
         id: ksecrets
