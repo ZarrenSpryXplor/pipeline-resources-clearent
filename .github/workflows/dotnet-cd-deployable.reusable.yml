@@ -68,55 +68,6 @@ env:
   REGISTRY: ghcr.io/xplor-pay
 
 jobs:
-  keeper:
-    name: Keeper Security Integration
-
-    runs-on:
-      group: CHQ
-      labels: linux
-    #runs-on: ubuntu-latest
-
-    outputs:
-      RANCHER_URL: ${{ steps.ksecrets.outputs.RANCHER_URL }}
-      RANCHER_ACCESS_KEY: ${{ steps.ksecrets.outputs.RANCHER_ACCESS_KEY }}
-      RANCHER_SECRET_KEY: ${{ steps.ksecrets.outputs.RANCHER_SECRET_KEY }}
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v7
-
-      - name: Fetch Rancher URL from Keeper Vault
-        id: ksecrets
-        uses: Keeper-Security/ksm-action@v1
-        with:
-          # Pulls the correct configuration based on the manual input choice
-          keeper-secret-config: ${{ secrets.RANCHER1_LAUNCH_DEV }}
-          secrets: |
-            Rancher/field/url > RANCHER_URL
-            Rancher/field/Access Key > RANCHER_ACCESS_KEY
-            Rancher/field/Secret Key > RANCHER_SECRET_KEY
-
-      - name: Keeper Vault Connectivity Verification
-        env:
-          RANCHER_URL: ${{ steps.ksecrets.outputs.RANCHER_URL }}
-        run: |
-          echo "=== Keeper Connection Verification ==="
-
-          echo "RANCHER_URL length: ${#RANCHER_URL}"
-
-          if [ -z "$RANCHER_URL" ]; then
-            echo "❌ ERROR: RANCHER_URL is completely empty. Check your Record Title or KEEPER_SECRET_CONFIG."
-            exit 1
-          fi
-
-          URL_LENGTH=${#RANCHER_URL}
-          echo "✅ SUCCESS: Secret retrieved successfully!"
-          echo "🔗 Secret Data Length: $URL_LENGTH characters"
-
-          PREFIX_PREVIEW=$(echo "$RANCHER_URL" | cut -c 1-5)
-          echo "📡 URL Prefix Preview: ${PREFIX_PREVIEW}..."
-          echo "======================================"
-
   containerize:
     name: Build and Push Docker Image
 
@@ -124,8 +75,6 @@ jobs:
       group: CHQ
       labels: linux
     #runs-on: ubuntu-latest
-
-    needs: keeper
 
     timeout-minutes: 45
 
@@ -286,7 +235,7 @@ jobs:
       labels: linux
     #runs-on: ubuntu-latest
 
-    needs: [ keeper, containerize ]
+    needs: [  containerize ]
 
     steps:
       - name: Checkout Source Code Repository
@@ -301,7 +250,7 @@ jobs:
           ref: main
           path: .github-actions-repo
 
-      - name: Fetch Rancher credentials from Keeper Vault
+      - name: Fetch Rancher URL from Keeper Vault
         id: ksecrets
         uses: Keeper-Security/ksm-action@v1
         with:
@@ -309,8 +258,29 @@ jobs:
           keeper-secret-config: ${{ secrets.RANCHER1_LAUNCH_DEV }}
           secrets: |
             Rancher/field/url > RANCHER_URL
-            Rancher/field/Access Key > RANCHER_ACCESS_KEY
-            Rancher/field/Secret Key > RANCHER_SECRET_KEY
+            Rancher/custom_field/Access Key > RANCHER_ACCESS_KEY
+            Rancher/custom_field/Secret Key > RANCHER_SECRET_KEY
+
+      - name: Keeper Vault Connectivity Verification
+        env:
+          RANCHER_URL: ${{ steps.ksecrets.outputs.RANCHER_URL }}
+        run: |
+          echo "=== Keeper Connection Verification ==="
+
+          echo "RANCHER_URL length: ${#RANCHER_URL}"
+
+          if [ -z "$RANCHER_URL" ]; then
+            echo "❌ ERROR: RANCHER_URL is completely empty. Check your Record Title or KEEPER_SECRET_CONFIG."
+            exit 1
+          fi
+
+          URL_LENGTH=${#RANCHER_URL}
+          echo "✅ SUCCESS: Secret retrieved successfully!"
+          echo "🔗 Secret Data Length: $URL_LENGTH characters"
+
+          PREFIX_PREVIEW=$(echo "$RANCHER_URL" | cut -c 1-5)
+          echo "📡 URL Prefix Preview: ${PREFIX_PREVIEW}..."
+          echo "======================================"
 
       - name: Install Rancher CLI Tools
         shell: bash
@@ -449,6 +419,7 @@ jobs:
           RANCHER_ACCESS_KEY: ${{ steps.ksecrets.outputs.RANCHER_ACCESS_KEY }}
           RANCHER_SECRET_KEY: ${{ steps.ksecrets.outputs.RANCHER_SECRET_KEY }}
           RANCHER_URL: ${{ steps.ksecrets.outputs.RANCHER_URL }}
+          RANCHER_STACK_NAME: ${{ inputs.rancher_stack_name }}
         continue-on-error: true
 
       # Upgrade service in Rancher via rancher-compose
