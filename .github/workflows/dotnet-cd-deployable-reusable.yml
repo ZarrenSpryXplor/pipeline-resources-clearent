@@ -68,55 +68,6 @@ env:
   REGISTRY: ghcr.io/xplor-pay
 
 jobs:
-  keeper:
-    name: Keeper Security Integration
-
-    runs-on:
-      group: CHQ
-      labels: linux
-    #runs-on: ubuntu-latest
-
-    outputs:
-      RANCHER_URL: ${{ steps.ksecrets.outputs.RANCHER_URL }}
-      RANCHER_ACCESS_KEY: ${{ steps.ksecrets.outputs.RANCHER_ACCESS_KEY }}
-      RANCHER_SECRET_KEY: ${{ steps.ksecrets.outputs.RANCHER_SECRET_KEY }}
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v7
-
-      - name: Fetch Rancher URL from Keeper Vault
-        id: ksecrets
-        uses: Keeper-Security/ksm-action@v1
-        with:
-          # Pulls the correct configuration based on the manual input choice
-          keeper-secret-config: ${{ secrets.RANCHER1_LAUNCH_DEV }}
-          secrets: |
-            Rancher/field/url > RANCHER_URL
-            Rancher/custom_field/Access Key > RANCHER_ACCESS_KEY
-            Rancher/custom_field/Secret Key > RANCHER_SECRET_KEY
-
-      - name: Keeper Vault Connectivity Verification
-        env:
-          RANCHER_URL: ${{ steps.ksecrets.outputs.RANCHER_URL }}
-        run: |
-          echo "=== Keeper Connection Verification ==="
-
-          echo "RANCHER_URL length: ${#RANCHER_URL}"
-
-          if [ -z "$RANCHER_URL" ]; then
-            echo "❌ ERROR: RANCHER_URL is completely empty. Check your Record Title or KEEPER_SECRET_CONFIG."
-            exit 1
-          fi
-
-          URL_LENGTH=${#RANCHER_URL}
-          echo "✅ SUCCESS: Secret retrieved successfully!"
-          echo "🔗 Secret Data Length: $URL_LENGTH characters"
-
-          PREFIX_PREVIEW=$(echo "$RANCHER_URL" | cut -c 1-5)
-          echo "📡 URL Prefix Preview: ${PREFIX_PREVIEW}..."
-          echo "======================================"
-
   containerize:
     name: Build and Push Docker Image
 
@@ -124,8 +75,6 @@ jobs:
       group: CHQ
       labels: linux
     #runs-on: ubuntu-latest
-
-    needs: keeper
 
     timeout-minutes: 45
 
@@ -286,10 +235,7 @@ jobs:
       labels: linux
     #runs-on: ubuntu-latest
 
-    needs: [ keeper, containerize ]
-
-    permissions:
-      contents: read
+    needs: [  containerize ]
 
     steps:
       - name: Checkout Source Code Repository
@@ -303,7 +249,57 @@ jobs:
           repository: xplor-pay/github-actions
           ref: main
           path: .github-actions-repo
-          token: ${{ secrets.PACKAGE_READER_PAT_TOKEN }}
+
+      - name: Fetch Rancher URL from Keeper Vault
+        id: ksecrets
+        uses: Keeper-Security/ksm-action@v1
+        with:
+          # Pulls the correct configuration based on the manual input choice
+          keeper-secret-config: ${{ secrets.RANCHER1_LAUNCH_DEV }}
+          secrets: |
+            Rancher/field/url > RANCHER_URL
+            Rancher/custom_field/Access Key > RANCHER_ACCESS_KEY
+            Rancher/custom_field/Secret Key > RANCHER_SECRET_KEY
+
+      - name: Keeper Vault Connectivity Verification
+        env:
+          RANCHER_URL: ${{ steps.ksecrets.outputs.RANCHER_URL }}
+          RANCHER_ACCESS_KEY: ${{ steps.ksecrets.outputs.RANCHER_ACCESS_KEY }}
+          RANCHER_SECRET_KEY: ${{ steps.ksecrets.outputs.RANCHER_SECRET_KEY }}
+        run: |
+          echo "=== Keeper Connection Verification ==="
+
+          echo "RANCHER_URL length: ${#RANCHER_URL}"
+          echo "RANCHER_ACCESS_KEY length: ${#RANCHER_ACCESS_KEY}"
+          echo "RANCHER_SECRET_KEY length: ${#RANCHER_SECRET_KEY}"
+
+          if [ -z "$RANCHER_URL" ]; then
+            echo "❌ ERROR: RANCHER_URL is completely empty. Check your Record Title or KEEPER_SECRET_CONFIG."
+            exit 1
+          fi
+
+          if [ -z "$RANCHER_ACCESS_KEY" ]; then
+            echo "❌ ERROR: RANCHER_ACCESS_KEY is completely empty. Check your Record Title or KEEPER_SECRET_CONFIG."
+            exit 1
+          fi
+
+          if [ -z "$RANCHER_SECRET_KEY" ]; then
+            echo "❌ ERROR: RANCHER_SECRET_KEY is completely empty. Check your Record Title or KEEPER_SECRET_CONFIG."
+            exit 1
+          fi
+
+          URL_LENGTH=${#RANCHER_URL}
+          echo "✅ SUCCESS: Secret retrieved successfully!"
+          echo "🔗 Secret Data Length: $URL_LENGTH characters"
+
+          ACCESS_KEY_LENGTH=${#RANCHER_ACCESS_KEY}
+          SECRET_KEY_LENGTH=${#RANCHER_SECRET_KEY}
+          echo "🔑 Access Key Length: $ACCESS_KEY_LENGTH characters"
+          echo "🔐 Secret Key Length: $SECRET_KEY_LENGTH characters"
+
+          PREFIX_PREVIEW=$(echo "$RANCHER_URL" | cut -c 1-5)
+          echo "📡 URL Prefix Preview: ${PREFIX_PREVIEW}..."
+          echo "======================================"
 
       - name: Install Rancher CLI Tools
         shell: bash
@@ -363,24 +359,36 @@ jobs:
           token-pattern: 'custom'
           token-prefix: '${'
           token-suffix: '}'
-          # These TRUST_* vars are defaults. Overridden when one of the 'Java Trust Store' variable groups are referenced, e.g. in Rancher production environments
-          variables: >-
-            {
-              "REGISTRY_NAME": "${{ env.REGISTRY }}",
-              "SERVICE_NAME": "${{ inputs.rancher_service_name }}",
-              "SERVICE_ENV": "${{ inputs.rancher_service_environment }}",
-              "IMAGE_VERSION": "${{ inputs.image_tag }}",
-              "IMAGE_TAG": "${{ inputs.image_tag }}",
-              "SCALE": "${{ inputs.container_scale }}",
-              "TRUST_STORE": "${{ inputs.trust_store }}",
-              "TRUST_PASSWORD": "${{ inputs.trust_password }}",
-              "JAVA_OPTIONS": "${{ inputs.java_options }}",
-              "RANCHER_STACK_NAME": "${{ inputs.rancher_stack_name }}",
-              "CRON_EXPRESSION": "${{ inputs.cron_expression }}"
-            }
+          variables: >
+            [
+              "$REGISTRY_NAME",
+              "$SERVICE_NAME",
+              "$SERVICE_ENV",
+              "$IMAGE_VERSION",
+              "$IMAGE_TAG",
+              "$SCALE",
+              "$TRUST_STORE",
+              "$TRUST_PASSWORD",
+              "$JAVA_OPTIONS",
+              "$RANCHER_STACK_NAME",
+              "$CRON_EXPRESSION"
+            ]
           no-telemetry: 'true'
           add-bom: false
           if-no-files-found: 'warn'
+        env:
+          REGISTRY_NAME: ${{ env.REGISTRY }}
+          SERVICE_NAME: ${{ inputs.rancher_service_name }}
+          SERVICE_ENV: ${{ inputs.rancher_service_environment }}
+          IMAGE_VERSION: ${{ inputs.image_tag }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          SCALE: ${{ inputs.container_scale }}
+          # These TRUST_* vars are defaults. Overridden when one of the 'Java Trust Store' variable groups are referenced, e.g. in Rancher production environments
+          TRUST_STORE: ${{ inputs.trust_store }}
+          TRUST_PASSWORD: ${{ inputs.trust_password }}
+          JAVA_OPTIONS: ${{ inputs.java_options }}
+          RANCHER_STACK_NAME: ${{ inputs.rancher_stack_name }}
+          CRON_EXPRESSION: ${{ inputs.cron_expression }}
 
       - name: Log the contents of the compose file for troubleshooting
         shell: bash
@@ -417,9 +425,9 @@ jobs:
         run: |
           & "${{ github.workspace }}/.github-actions-repo/rancher/restart_tequila.ps1"
         env:
-          RANCHER_ACCESS_KEY: ${{ needs.keeper.outputs.RANCHER_ACCESS_KEY }}
-          RANCHER_SECRET_KEY: ${{ needs.keeper.outputs.RANCHER_SECRET_KEY }}
-          RANCHER_URL: ${{ needs.keeper.outputs.RANCHER_URL }}
+          RANCHER_ACCESS_KEY: ${{ steps.ksecrets.outputs.RANCHER_ACCESS_KEY }}
+          RANCHER_SECRET_KEY: ${{ steps.ksecrets.outputs.RANCHER_SECRET_KEY }}
+          RANCHER_URL: ${{ steps.ksecrets.outputs.RANCHER_URL }}
 
       # List existing running services in case of rollback
       - name: List existing running services in case of rollback
@@ -427,9 +435,10 @@ jobs:
         run: |
           /usr/local/bin/rancher --url "$RANCHER_URL" --access-key "$RANCHER_ACCESS_KEY" --secret-key "$RANCHER_SECRET_KEY" ps --format '{{.Service.Name}} {{.Service.LaunchConfig.ImageUuid}}'
         env:
-          RANCHER_ACCESS_KEY: ${{ needs.keeper.outputs.RANCHER_ACCESS_KEY }}
-          RANCHER_SECRET_KEY: ${{ needs.keeper.outputs.RANCHER_SECRET_KEY }}
-          RANCHER_URL: ${{ needs.keeper.outputs.RANCHER_URL }}
+          RANCHER_ACCESS_KEY: ${{ steps.ksecrets.outputs.RANCHER_ACCESS_KEY }}
+          RANCHER_SECRET_KEY: ${{ steps.ksecrets.outputs.RANCHER_SECRET_KEY }}
+          RANCHER_URL: ${{ steps.ksecrets.outputs.RANCHER_URL }}
+          RANCHER_STACK_NAME: ${{ inputs.rancher_stack_name }}
         continue-on-error: true
 
       # Upgrade service in Rancher via rancher-compose
@@ -438,9 +447,9 @@ jobs:
         run: |
           /usr/local/bin/rancher-compose --debug --url "$RANCHER_URL" --access-key "$RANCHER_ACCESS_KEY" --secret-key "$RANCHER_SECRET_KEY" --project-name "$RANCHER_STACK_NAME" up --force-upgrade --batch-size "1" --confirm-upgrade -d
         env:
-          RANCHER_ACCESS_KEY: ${{ needs.keeper.outputs.RANCHER_ACCESS_KEY }}
-          RANCHER_SECRET_KEY: ${{ needs.keeper.outputs.RANCHER_SECRET_KEY }}
-          RANCHER_URL: ${{ needs.keeper.outputs.RANCHER_URL }}
+          RANCHER_ACCESS_KEY: ${{ steps.ksecrets.outputs.RANCHER_ACCESS_KEY }}
+          RANCHER_SECRET_KEY: ${{ steps.ksecrets.outputs.RANCHER_SECRET_KEY }}
+          RANCHER_URL: ${{ steps.ksecrets.outputs.RANCHER_URL }}
           RANCHER_STACK_NAME: ${{ inputs.rancher_stack_name }}
         working-directory: ${{ github.workspace }}/staging
         
