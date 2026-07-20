@@ -264,19 +264,38 @@ jobs:
       - name: Keeper Vault Connectivity Verification
         env:
           RANCHER_URL: ${{ steps.ksecrets.outputs.RANCHER_URL }}
+          RANCHER_ACCESS_KEY: ${{ steps.ksecrets.outputs.RANCHER_ACCESS_KEY }}
+          RANCHER_SECRET_KEY: ${{ steps.ksecrets.outputs.RANCHER_SECRET_KEY }}
         run: |
           echo "=== Keeper Connection Verification ==="
 
           echo "RANCHER_URL length: ${#RANCHER_URL}"
+          echo "RANCHER_ACCESS_KEY length: ${#RANCHER_ACCESS_KEY}"
+          echo "RANCHER_SECRET_KEY length: ${#RANCHER_SECRET_KEY}"
 
           if [ -z "$RANCHER_URL" ]; then
             echo "❌ ERROR: RANCHER_URL is completely empty. Check your Record Title or KEEPER_SECRET_CONFIG."
             exit 1
           fi
 
+          if [ -z "$RANCHER_ACCESS_KEY" ]; then
+            echo "❌ ERROR: RANCHER_ACCESS_KEY is completely empty. Check your Record Title or KEEPER_SECRET_CONFIG."
+            exit 1
+          fi
+
+          if [ -z "$RANCHER_SECRET_KEY" ]; then
+            echo "❌ ERROR: RANCHER_SECRET_KEY is completely empty. Check your Record Title or KEEPER_SECRET_CONFIG."
+            exit 1
+          fi
+
           URL_LENGTH=${#RANCHER_URL}
           echo "✅ SUCCESS: Secret retrieved successfully!"
           echo "🔗 Secret Data Length: $URL_LENGTH characters"
+
+          ACCESS_KEY_LENGTH=${#RANCHER_ACCESS_KEY}
+          SECRET_KEY_LENGTH=${#RANCHER_SECRET_KEY}
+          echo "🔑 Access Key Length: $ACCESS_KEY_LENGTH characters"
+          echo "🔐 Secret Key Length: $SECRET_KEY_LENGTH characters"
 
           PREFIX_PREVIEW=$(echo "$RANCHER_URL" | cut -c 1-5)
           echo "📡 URL Prefix Preview: ${PREFIX_PREVIEW}..."
