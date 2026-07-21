@@ -338,23 +338,32 @@ jobs:
           mkdir -p "${staging_dir}"
 
           # Use the compose files from the app repo, if exists. Otherwise, use shared templates
-          if [ -f "${source_dir}/docker-compose.yml" ] || [ -f "${source_dir}/docker-compose.yml.tmpl" ]; then
-            cp --verbose "${source_dir}/docker-compose.yml" "${staging_dir}/docker-compose.yml" ||
+          if [ -f "${source_dir}/docker-compose.yml" ]; then
+            echo "Using source docker-compose.yml"
+            cp --verbose "${source_dir}/docker-compose.yml" "${staging_dir}/docker-compose.yml"
+          elif [ -f "${source_dir}/docker-compose.yml.tmpl" ]; then
+            echo "Using source docker-compose.yml.tmpl"
             cp --verbose "${source_dir}/docker-compose.yml.tmpl" "${staging_dir}/docker-compose.yml"
           else
+            echo "Using shared template docker-compose.yml from ${compose_template}"
             cp --verbose "${templates_dir}/${compose_template}/docker-compose.yml" "${staging_dir}/docker-compose.yml"
           fi
 
-          if [ -f "${source_dir}/rancher-compose.yml" ] || [ -f "${source_dir}/rancher-compose.yml.tmpl" ]; then
-            cp --verbose "${source_dir}/rancher-compose.yml" "${staging_dir}/rancher-compose.yml" ||
-              cp --verbose "${source_dir}/rancher-compose.yml.tmpl" "${staging_dir}/rancher-compose.yml"
+          if [ -f "${source_dir}/rancher-compose.yml" ]; then
+            echo "Using source rancher-compose.yml"
+            cp --verbose "${source_dir}/rancher-compose.yml" "${staging_dir}/rancher-compose.yml"
+          elif [ -f "${source_dir}/rancher-compose.yml.tmpl" ]; then
+            echo "Using source rancher-compose.yml.tmpl"
+            cp --verbose "${source_dir}/rancher-compose.yml.tmpl" "${staging_dir}/rancher-compose.yml"
           else
+            echo "Using shared template rancher-compose.yml from ${compose_template}"
             cp --verbose "${templates_dir}/${compose_template}/rancher-compose.yml" "${staging_dir}/rancher-compose.yml"
           fi
 
       - name: Replace tokens in compose file
         uses: qetza/replacetokens-action@78be0760a482930501bc80465505fe274a5a620d
         with:
+          root: ${{ github.workspace }}/staging
           sources: |
             docker-compose.yml
             rancher-compose.yml
