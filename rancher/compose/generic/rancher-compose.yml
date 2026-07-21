@@ -2,7 +2,7 @@ ${SERVICE_NAME}:
   scale: ${SCALE}
   health_check:
     port: 9000
-    request_line: GET /health HTTP/1.0\r\nAccept:\ application/json
+    request_line: "GET /health HTTP/1.0\r\nAccept:\ application/json"
     interval: 5000
     initializing_timeout: 100000
     unhealthy_threshold: 3

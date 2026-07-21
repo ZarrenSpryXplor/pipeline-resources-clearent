@@ -391,6 +391,7 @@ jobs:
 
       - name: Log the contents of the compose file for troubleshooting
         shell: bash
+        working-directory: ${{ github.workspace }}/staging
         run: |
           imageTag="${{ inputs.image_tag }}"
           trustPassword="${{ inputs.trust_password }}"
@@ -417,6 +418,12 @@ jobs:
             sed -E 's/^([[:space:]]*[^:#]*(_PASSWORD|PASSWORD|PASSWD|TOKEN|SECRET):).*/\1 [REDACTED]/I' "$manifest"
             echo
           done
+
+          echo; echo "==== docker-compose.yml ===="
+          sed -E 's/^([[:space:]]*[^:#]*(_PASSWORD|PASSWORD|PASSWD|TOKEN|SECRET):).*/\1 [REDACTED]/I' docker-compose.yml
+
+          echo; echo "==== rancher-compose.yml ===="
+          sed -E 's/^([[:space:]]*[^:#]*(_PASSWORD|PASSWORD|PASSWD|TOKEN|SECRET):).*/\1 [REDACTED]/I' rancher-compose.yml
 
       # Restart tequila on all nodes to ensure latest configs are pulled
       - name: Restart tequila
