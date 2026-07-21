@@ -150,6 +150,8 @@ jobs:
           echo "dockerfile_path=$DOCKERFILE_PATH" >> "$GITHUB_OUTPUT"
           echo "Dockerfile location: $DOCKERFILE_PATH"
 
+      # Ideally, we would use the github.event.repository.name to determine the image name, 
+      # but not all of our repository names align with rancher service names.
       - name: Resolve Docker image name
         id: resolve-image
         shell: bash
@@ -157,7 +159,8 @@ jobs:
           RAW_IMAGE_NAME="${{ inputs.image_name }}"
 
           if [ -z "$RAW_IMAGE_NAME" ]; then
-            RAW_IMAGE_NAME="${{ github.event.repository.name }}"
+            # Default to the Rancher service name so build and deploy reference the same image repository.
+            RAW_IMAGE_NAME="${{ inputs.rancher_service_name }}"
           fi
 
           # GHCR image path segments must be lowercase.
