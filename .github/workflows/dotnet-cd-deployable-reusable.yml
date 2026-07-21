@@ -158,18 +158,27 @@ jobs:
         run: |
           RAW_IMAGE_NAME="${{ inputs.image_name }}"
 
+          echo "Resolve image name input (image_name): '${RAW_IMAGE_NAME}'"
+
           if [ -z "$RAW_IMAGE_NAME" ]; then
             # Default to the Rancher service name so build and deploy reference the same image repository.
             RAW_IMAGE_NAME="${{ inputs.rancher_service_name }}"
+            echo "No image_name provided; defaulting to rancher_service_name: '${RAW_IMAGE_NAME}'"
+          else
+            echo "Using explicit image_name input: '${RAW_IMAGE_NAME}'"
           fi
 
           # GHCR image path segments must be lowercase.
           RAW_IMAGE_NAME="${RAW_IMAGE_NAME,,}"
 
+          echo "Lowercased image name: '${RAW_IMAGE_NAME}'"
+
           # Trim surrounding whitespace and slashes from caller input.
           RAW_IMAGE_NAME="$(echo "$RAW_IMAGE_NAME" | xargs)"
           RAW_IMAGE_NAME="${RAW_IMAGE_NAME#/}"
           RAW_IMAGE_NAME="${RAW_IMAGE_NAME%/}"
+
+          echo "Trimmed image name: '${RAW_IMAGE_NAME}'"
 
           # Accept caller values like ghcr.io/org/repo, org/repo, or repo.
           RAW_IMAGE_NAME="${RAW_IMAGE_NAME#ghcr.io/}"
@@ -179,6 +188,9 @@ jobs:
           while [[ "$RAW_IMAGE_NAME" == "$OWNER_PREFIX"* ]]; do
             RAW_IMAGE_NAME="${RAW_IMAGE_NAME#${OWNER_PREFIX}}"
           done
+
+          echo "Resolved repository path for GHCR: '${RAW_IMAGE_NAME}'"
+          echo "Final image reference: '${{ env.REGISTRY }}/${RAW_IMAGE_NAME}:${{ inputs.image_tag }}'"
 
           echo "image_name=$RAW_IMAGE_NAME" >> "$GITHUB_OUTPUT"
 
