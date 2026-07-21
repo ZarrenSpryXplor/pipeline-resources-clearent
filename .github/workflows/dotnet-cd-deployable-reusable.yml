@@ -377,6 +377,7 @@ jobs:
               "SERVICE_NAME": "${{ inputs.rancher_service_name }}",
               "SERVICE_ENV": "${{ inputs.rancher_service_environment }}",
               "IMAGE_VERSION": "${{ inputs.image_tag }}",
+              "BUILD_BUILDNUMBER": "${{ inputs.image_tag }}",
               "IMAGE_TAG": "${{ inputs.image_tag }}",
               "SCALE": "${{ inputs.container_scale }}",
               "TRUST_STORE": "${{ inputs.trust_store }}",
