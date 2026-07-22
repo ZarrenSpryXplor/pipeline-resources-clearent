@@ -132,8 +132,10 @@ jobs:
       AZURE_ARTIFACTS_PAT: ${{ secrets.AZURE_ARTIFACTS_PAT }}
 ```
 
-The application name must exactly match the calling repository, and the
-calling repository must belong to `xplor-pay`. If no Dockerfile path is
+The lowercase application name must match the calling repository name,
+ignoring case, and the calling repository must belong to `xplor-pay`. This
+supports legacy mixed-case GitHub repository names while retaining canonical
+image and Kubernetes names. If no Dockerfile path is
 provided, exactly one Dockerfile must be discoverable below the build context.
 
 `AZURE_ARTIFACTS_PAT` is optional and is exposed only as a BuildKit

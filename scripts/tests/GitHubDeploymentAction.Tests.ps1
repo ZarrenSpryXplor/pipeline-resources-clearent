@@ -305,7 +305,8 @@ try {
             $workflowText.Contains('name: ${{ inputs.environment }}') -and
             -not $workflowText.Contains("format('clearent-{0}', inputs.environment)") -and
             $workflowText.Contains("CLEARENT_REPOSITORY_OWNER -cne 'xplor-pay'") -and
-            $workflowText.Contains('application_name must exactly match the calling repository name') -and
+            $workflowText.Contains('$repositoryParts[1] -ine $env:CLEARENT_APPLICATION_NAME') -and
+            $workflowText.Contains('application_name must match the calling repository name, ignoring case') -and
             $workflowText.Contains('cancel-in-progress: false') -and
             $workflowText.Contains('timeout-minutes: 90') -and
             -not $workflowText.Contains('secrets: inherit') -and

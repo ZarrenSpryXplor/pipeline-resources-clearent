@@ -99,9 +99,9 @@ jobs:
           $repositoryParts = @($env:CLEARENT_REPOSITORY.Split("/", 2))
           if (
             $repositoryParts.Count -ne 2 -or
-            $repositoryParts[1] -cne $env:CLEARENT_APPLICATION_NAME
+            $repositoryParts[1] -ine $env:CLEARENT_APPLICATION_NAME
           ) {
-            throw "application_name must exactly match the calling repository name."
+            throw "application_name must match the calling repository name, ignoring case."
           }
 
       - name: Resolve called workflow identity
