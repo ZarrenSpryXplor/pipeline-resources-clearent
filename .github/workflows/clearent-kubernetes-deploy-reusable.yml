@@ -251,10 +251,11 @@ jobs:
         id: workflow-identity
         shell: pwsh
         env:
+          CLEARENT_WORKFLOW_REPOSITORY: ZarrenSpryXplor/pipeline-resources-clearent
           CLEARENT_EXPECTED_WORKFLOW_PATH: .github/workflows/clearent-kubernetes-deploy-reusable.yml
         run: |
           $ErrorActionPreference = "Stop"
-          $audience = "xplor-pay/github-actions"
+          $audience = "${env:CLEARENT_WORKFLOW_REPOSITORY}"
           if (
             [string]::IsNullOrWhiteSpace($env:ACTIONS_ID_TOKEN_REQUEST_URL) -or
             [string]::IsNullOrWhiteSpace($env:ACTIONS_ID_TOKEN_REQUEST_TOKEN)
@@ -283,7 +284,7 @@ jobs:
           $payload = [Text.Encoding]::UTF8.GetString(
             [Convert]::FromBase64String($payloadText)
           ) | ConvertFrom-Json
-          $expectedPrefix = "xplor-pay/github-actions/$($env:CLEARENT_EXPECTED_WORKFLOW_PATH)@"
+          $expectedPrefix = "$($env:CLEARENT_WORKFLOW_REPOSITORY)/$($env:CLEARENT_EXPECTED_WORKFLOW_PATH)@"
           $workflowRef = [string]$payload.job_workflow_ref
           $workflowSha = ([string]$payload.job_workflow_sha).ToLowerInvariant()
           $calledReference = if ($workflowRef.StartsWith($expectedPrefix, [StringComparison]::Ordinal)) {
@@ -338,7 +339,7 @@ jobs:
       - name: Check out pinned Clearent platform implementation
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          repository: xplor-pay/github-actions
+          repository: ZarrenSpryXplor/pipeline-resources-clearent
           ref: ${{ needs.preflight.outputs.workflow_sha }}
           token: ${{ secrets.CLEARENT_PLATFORM_READ_TOKEN }}
           path: platform
@@ -356,7 +357,7 @@ jobs:
         with:
           platform-directory: ${{ github.workspace }}/platform
           application-directory: ${{ github.workspace }}/application
-          workflow-repository: xplor-pay/github-actions
+          workflow-repository: ZarrenSpryXplor/pipeline-resources-clearent
           workflow-ref: ${{ needs.preflight.outputs.workflow_ref }}
           workflow-sha: ${{ needs.preflight.outputs.workflow_sha }}
           agave-package-read-token: ${{ secrets.AGAVE_AZURE_DEVOPS_PAT }}
