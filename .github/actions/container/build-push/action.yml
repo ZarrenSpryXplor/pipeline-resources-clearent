@@ -42,6 +42,10 @@ inputs:
     description: Optional Azure Artifacts PAT exposed only as a BuildKit secret.
     required: false
     default: ""
+  package-read-token:
+    description: Optional registry-neutral package-read token exposed only as a BuildKit secret.
+    required: false
+    default: ""
 
 outputs:
   digest:
@@ -91,6 +95,7 @@ runs:
         build-args: ${{ inputs.build-arguments }}
         secrets: |
           AZURE_ARTIFACTS_PAT=${{ inputs.azure-artifacts-pat }}
+          PACKAGE_READ_TOKEN=${{ inputs.package-read-token }}
         provenance: mode=max
         sbom: true
 

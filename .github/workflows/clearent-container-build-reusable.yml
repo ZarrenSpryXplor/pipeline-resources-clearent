@@ -59,6 +59,9 @@ on:
       AZURE_ARTIFACTS_PAT:
         description: Optional package token exposed to Docker only as a BuildKit secret.
         required: false
+      PACKAGE_READ_TOKEN:
+        description: Optional registry-neutral package-read token exposed only as a BuildKit secret.
+        required: false
 
 permissions:
   contents: read
@@ -206,3 +209,4 @@ jobs:
           context: ${{ inputs.build_context }}
           build-arguments: ${{ inputs.build_arguments }}
           azure-artifacts-pat: ${{ secrets.AZURE_ARTIFACTS_PAT }}
+          package-read-token: ${{ secrets.PACKAGE_READ_TOKEN }}

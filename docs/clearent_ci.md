@@ -129,6 +129,7 @@ jobs:
       CLEARENT_PLATFORM_READ_TOKEN: ${{ secrets.CLEARENT_PLATFORM_READ_TOKEN }}
       ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
       ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+      PACKAGE_READ_TOKEN: ${{ secrets.PACKAGE_READ_TOKEN }}
       AZURE_ARTIFACTS_PAT: ${{ secrets.AZURE_ARTIFACTS_PAT }}
 ```
 
@@ -138,13 +139,15 @@ supports legacy mixed-case GitHub repository names while retaining canonical
 image and Kubernetes names. If no Dockerfile path is
 provided, exactly one Dockerfile must be discoverable below the build context.
 
-`AZURE_ARTIFACTS_PAT` is optional and is exposed only as a BuildKit
-secret. A Dockerfile that needs it must consume the secret during the relevant
-build step, for example:
+`PACKAGE_READ_TOKEN` is the preferred registry-neutral credential for private
+package restore during a container build. `AZURE_ARTIFACTS_PAT` remains
+available for existing Dockerfiles. Both are optional and exposed only as
+BuildKit secrets. A Dockerfile must consume the relevant secret during its
+restore step, for example:
 
 ```dockerfile
-RUN --mount=type=secret,id=AZURE_ARTIFACTS_PAT \
-    token="$(cat /run/secrets/AZURE_ARTIFACTS_PAT)" && \
+RUN --mount=type=secret,id=PACKAGE_READ_TOKEN \
+    token="$(cat /run/secrets/PACKAGE_READ_TOKEN)" && \
     ./restore-packages.sh "$token"
 ```
 

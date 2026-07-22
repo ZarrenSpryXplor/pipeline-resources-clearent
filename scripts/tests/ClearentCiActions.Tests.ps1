@@ -222,9 +222,10 @@ Assert-True `
     -Condition (
         $containerAction.Contains("secrets: |") -and
         $containerAction.Contains("AZURE_ARTIFACTS_PAT=") -and
+        $containerAction.Contains("PACKAGE_READ_TOKEN=") -and
         -not [regex]::IsMatch(
             $containerAction,
-            '(?m)^\s*build-args:.*AZURE_ARTIFACTS_PAT'
+            '(?m)^\s*build-args:.*(AZURE_ARTIFACTS_PAT|PACKAGE_READ_TOKEN)'
         )
     ) `
     -Message "The package token must be passed to Docker only as a BuildKit secret."
