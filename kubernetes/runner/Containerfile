@@ -1,0 +1,99 @@
+# Keep the ARC runner itself supplied by GitHub, and add only the tools needed
+# by the Clearent Kubernetes deployment workflow. Pin this base to an immutable
+# version or digest in the production build invocation.
+ARG RUNNER_IMAGE=ghcr.io/actions/actions-runner:latest
+FROM ${RUNNER_IMAGE}
+
+ARG TARGETARCH
+ARG KUBECTL_VERSION=v1.36.1
+ARG HELM_VERSION=v3.21.0
+ARG HELM_DIFF_VERSION=v3.15.10
+
+USER root
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# PowerShell and Azure CLI are installed from Microsoft's signed repositories.
+# git is required by actions/checkout and by Helm plugin installation.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        apt-transport-https \
+        ca-certificates \
+        curl \
+        git \
+        gnupg \
+        lsb-release \
+    && curl --fail --show-error --silent --location \
+        "https://packages.microsoft.com/config/ubuntu/$(. /etc/os-release && printf '%s' "${VERSION_ID}")/packages-microsoft-prod.deb" \
+        --output /tmp/packages-microsoft-prod.deb \
+    && dpkg --install /tmp/packages-microsoft-prod.deb \
+    && curl --fail --show-error --silent --location \
+        https://packages.microsoft.com/keys/microsoft.asc \
+        | gpg --dearmor --output /usr/share/keyrings/microsoft-azure-cli.gpg \
+    && chmod go+r /usr/share/keyrings/microsoft-azure-cli.gpg \
+    && printf 'Types: deb\nURIs: https://packages.microsoft.com/repos/azure-cli/\nSuites: %s\nComponents: main\nArchitectures: %s\nSigned-by: /usr/share/keyrings/microsoft-azure-cli.gpg\n' \
+        "$(lsb_release --codename --short)" \
+        "$(dpkg --print-architecture)" \
+        > /etc/apt/sources.list.d/azure-cli.sources \
+    && apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        azure-cli \
+        powershell \
+    && rm -f /tmp/packages-microsoft-prod.deb \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install architecture-matched kubectl and verify the published checksum.
+RUN case "${TARGETARCH:-amd64}" in \
+        amd64) tool_arch=amd64 ;; \
+        arm64) tool_arch=arm64 ;; \
+        *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && curl --fail --show-error --silent --location \
+        "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${tool_arch}/kubectl" \
+        --output /usr/local/bin/kubectl \
+    && curl --fail --show-error --silent --location \
+        "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${tool_arch}/kubectl.sha256" \
+        --output /tmp/kubectl.sha256 \
+    && printf '%s  %s\n' "$(cat /tmp/kubectl.sha256)" /usr/local/bin/kubectl \
+        | sha256sum --check --strict \
+    && chmod 0755 /usr/local/bin/kubectl \
+    && rm -f /tmp/kubectl.sha256
+
+# Install Helm 3 and verify the checksum published alongside its release.
+RUN case "${TARGETARCH:-amd64}" in \
+        amd64) tool_arch=amd64 ;; \
+        arm64) tool_arch=arm64 ;; \
+        *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && archive="helm-${HELM_VERSION}-linux-${tool_arch}.tar.gz" \
+    && curl --fail --show-error --silent --location \
+        "https://get.helm.sh/${archive}" \
+        --output "/tmp/${archive}" \
+    && curl --fail --show-error --silent --location \
+        "https://get.helm.sh/${archive}.sha256sum" \
+        --output "/tmp/${archive}.sha256sum" \
+    && cd /tmp \
+    && sha256sum --check --strict "${archive}.sha256sum" \
+    && tar --extract --gzip --file "${archive}" \
+        --strip-components=1 \
+        --directory /usr/local/bin \
+        "linux-${tool_arch}/helm" \
+    && chmod 0755 /usr/local/bin/helm \
+    && rm -f "/tmp/${archive}" "/tmp/${archive}.sha256sum"
+
+USER runner
+
+# Install user-scoped extensions as the same account that executes workflows.
+RUN az extension add --name azure-devops --yes \
+    && helm plugin install https://github.com/databus23/helm-diff \
+        --version "${HELM_DIFF_VERSION}"
+
+# Fail the image build early if a required command or extension is unavailable.
+RUN pwsh --version \
+    && kubectl version --client \
+    && helm version --short \
+    && helm diff version \
+    && az version \
+    && az extension show --name azure-devops --output none
+
+ENTRYPOINT ["/home/runner/run.sh"]

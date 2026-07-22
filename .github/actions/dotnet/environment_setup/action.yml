@@ -12,7 +12,7 @@ runs:
 
   steps:
     - name: Setup .NET Environment
-      uses: actions/setup-dotnet@v5
+      uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
       with:
         # Always install .NET 8 as well because Xplor.AI.Metrics.BuildTool is packaged under tools/net8.0.
         # This keeps tool installation stable even when caller repositories build with older SDKs.

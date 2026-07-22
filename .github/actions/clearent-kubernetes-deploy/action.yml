@@ -1,0 +1,406 @@
+name: Clearent Kubernetes deployment
+description: Runs the validated Clearent Helm and Agave deployment transaction.
+
+inputs:
+  platform-directory:
+    description: Checked-out xplor-pay/github-actions directory.
+    required: true
+  application-directory:
+    description: Checked-out application repository directory.
+    required: true
+  workflow-repository:
+    description: Repository containing the reusable platform workflow.
+    required: true
+  workflow-ref:
+    description: Ref of the reusable workflow that defines the deployment job.
+    required: true
+  workflow-sha:
+    description: Commit SHA of the reusable workflow that defines the deployment job.
+    required: true
+  agave-package-read-token:
+    description: Read-only Azure DevOps token used only by the Agave package step.
+    required: false
+    default: ""
+  kubeconfig-b64:
+    description: Environment-scoped base64 kubeconfig used only by the credential step.
+    required: true
+  expected-api-server-sha256:
+    description: Platform-managed SHA-256 of the canonical Kubernetes API server URL.
+    required: true
+  environment:
+    description: Exact Clearent environment identity, such as dev or clearent-dev.
+    required: true
+  application-name:
+    description: Kubernetes release and workload name.
+    required: true
+  application-type:
+    description: Clearent workload type.
+    required: true
+  application-framework:
+    description: Application framework.
+    required: true
+  kubernetes-namespace:
+    description: Target Kubernetes namespace.
+    required: true
+  image-tag:
+    description: Container image tag to deploy.
+    required: true
+  replica-count:
+    description: Desired replica count.
+    required: false
+    default: "1"
+  application-size:
+    description: Clearent resource profile.
+    required: false
+    default: small
+  service-classification:
+    description: Clearent service classification.
+    required: false
+    default: undefined
+  health-check-path:
+    description: Optional health-check path.
+    required: false
+    default: ""
+  health-check-port:
+    description: Optional health-check port.
+    required: false
+    default: ""
+  cron-job-schedule:
+    description: CronJob schedule when the workload is a CronJob.
+    required: false
+    default: ""
+  cron-job-suspended:
+    description: Whether a CronJob is suspended.
+    required: false
+    default: "false"
+  java-options:
+    description: JVM options for Java workloads.
+    required: false
+    default: -Xmx512m
+  ingress-subdomain:
+    description: Optional override; defaults to the legacy framework/environment route.
+    required: false
+    default: ""
+  ingress-domain:
+    description: Clearent ingress domain.
+    required: false
+    default: clearent.net
+  ingress-path:
+    description: Primary ingress path.
+    required: false
+    default: ""
+  ingress-path-2:
+    description: Secondary ingress path.
+    required: false
+    default: ""
+  ingress-tls:
+    description: Enable ingress TLS.
+    required: false
+    default: "true"
+  backend-tls:
+    description: Enable TLS from ingress to the workload.
+    required: false
+    default: "false"
+  ingress-cert-secret:
+    description: Ingress certificate Secret name.
+    required: false
+    default: clearent-wildcard
+  ingress-config-snippet:
+    description: Optional ingress configuration snippet.
+    required: false
+    default: ""
+  behind-edge-service:
+    description: Whether the application is behind the edge service.
+    required: false
+    default: "true"
+  site-status:
+    description: Site status label.
+    required: false
+    default: inactive
+  extra-env-vars:
+    description: JSON object containing non-secret extra environment variables.
+    required: false
+    default: "{}"
+  kerberos-enabled:
+    description: Enable the chart's Kerberos integration.
+    required: false
+    default: "false"
+  smb-mounts:
+    description: JSON array containing SMB mount definitions.
+    required: false
+    default: "[]"
+  enable-agave:
+    description: Enable Agave contract processing and guarded reconciliation.
+    required: false
+    default: "false"
+  skip-kubernetes-tls-verify:
+    description: Disable Kubernetes TLS verification in authorised dev/tst only.
+    required: false
+    default: "false"
+
+outputs:
+  report-path:
+    description: Path to the canonical deployment report, when emitted.
+    value: ${{ steps.report.outputs.report-path }}
+  working-directory:
+    description: Isolated temporary directory used by the transaction.
+    value: ${{ steps.prepare.outputs.working-directory }}
+
+runs:
+  using: composite
+  steps:
+    - name: Prepare isolated deployment workspace
+      id: prepare
+      shell: pwsh
+      env:
+        CLEARENT_INPUT_PLATFORM_DIRECTORY: ${{ inputs.platform-directory }}
+        CLEARENT_INPUT_APPLICATION_DIRECTORY: ${{ inputs.application-directory }}
+        CLEARENT_INPUT_WORKFLOW_REPOSITORY: ${{ inputs.workflow-repository }}
+        CLEARENT_INPUT_WORKFLOW_REF: ${{ inputs.workflow-ref }}
+        CLEARENT_INPUT_WORKFLOW_SHA: ${{ inputs.workflow-sha }}
+        CLEARENT_INPUT_ENVIRONMENT: ${{ inputs.environment }}
+        CLEARENT_INPUT_APPLICATION_NAME: ${{ inputs.application-name }}
+        CLEARENT_INPUT_APPLICATION_TYPE: ${{ inputs.application-type }}
+        CLEARENT_INPUT_APPLICATION_FRAMEWORK: ${{ inputs.application-framework }}
+        CLEARENT_INPUT_KUBERNETES_NAMESPACE: ${{ inputs.kubernetes-namespace }}
+        CLEARENT_INPUT_IMAGE_TAG: ${{ inputs.image-tag }}
+        CLEARENT_INPUT_REPLICA_COUNT: ${{ inputs.replica-count }}
+        CLEARENT_INPUT_APPLICATION_SIZE: ${{ inputs.application-size }}
+        CLEARENT_INPUT_SERVICE_CLASSIFICATION: ${{ inputs.service-classification }}
+        CLEARENT_INPUT_HEALTH_CHECK_PATH: ${{ inputs.health-check-path }}
+        CLEARENT_INPUT_HEALTH_CHECK_PORT: ${{ inputs.health-check-port }}
+        CLEARENT_INPUT_CRON_JOB_SCHEDULE: ${{ inputs.cron-job-schedule }}
+        CLEARENT_INPUT_CRON_JOB_SUSPENDED: ${{ inputs.cron-job-suspended }}
+        CLEARENT_INPUT_JAVA_OPTIONS: ${{ inputs.java-options }}
+        CLEARENT_INPUT_INGRESS_SUBDOMAIN: ${{ inputs.ingress-subdomain }}
+        CLEARENT_INPUT_INGRESS_DOMAIN: ${{ inputs.ingress-domain }}
+        CLEARENT_INPUT_INGRESS_PATH: ${{ inputs.ingress-path }}
+        CLEARENT_INPUT_INGRESS_PATH_2: ${{ inputs.ingress-path-2 }}
+        CLEARENT_INPUT_INGRESS_TLS: ${{ inputs.ingress-tls }}
+        CLEARENT_INPUT_BACKEND_TLS: ${{ inputs.backend-tls }}
+        CLEARENT_INPUT_INGRESS_CERT_SECRET: ${{ inputs.ingress-cert-secret }}
+        CLEARENT_INPUT_INGRESS_CONFIG_SNIPPET: ${{ inputs.ingress-config-snippet }}
+        CLEARENT_INPUT_BEHIND_EDGE_SERVICE: ${{ inputs.behind-edge-service }}
+        CLEARENT_INPUT_SITE_STATUS: ${{ inputs.site-status }}
+        CLEARENT_INPUT_EXTRA_ENV_VARS: ${{ inputs.extra-env-vars }}
+        CLEARENT_INPUT_KERBEROS_ENABLED: ${{ inputs.kerberos-enabled }}
+        CLEARENT_INPUT_SMB_MOUNTS: ${{ inputs.smb-mounts }}
+        CLEARENT_INPUT_ENABLE_AGAVE: ${{ inputs.enable-agave }}
+        CLEARENT_INPUT_SKIP_KUBERNETES_TLS_VERIFY: ${{ inputs.skip-kubernetes-tls-verify }}
+      run: >-
+        & "$env:GITHUB_ACTION_PATH/main.ps1" -Mode Prepare
+
+    - name: Configure environment-scoped Kubernetes credentials
+      shell: pwsh
+      env:
+        CLEARENT_KUBECONFIG_B64: ${{ inputs.kubeconfig-b64 }}
+        CLEARENT_EXPECTED_API_SERVER_SHA256: ${{ inputs.expected-api-server-sha256 }}
+      run: |
+        if ([string]::IsNullOrWhiteSpace($env:CLEARENT_KUBECONFIG_B64)) {
+          throw "CLEARENT_KUBECONFIG_B64 is not configured for this GitHub environment."
+        }
+        try {
+          $bytes = [Convert]::FromBase64String($env:CLEARENT_KUBECONFIG_B64)
+        }
+        catch {
+          throw "CLEARENT_KUBECONFIG_B64 is not valid base64."
+        }
+        if ($bytes.Length -eq 0) {
+          throw "The decoded kubeconfig is empty."
+        }
+        $path = Join-Path $env:CLEARENT_WORKING_DIRECTORY "kubeconfig"
+        [IO.File]::WriteAllBytes($path, $bytes)
+        if (-not $IsWindows) {
+          & chmod 600 $path
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not restrict kubeconfig permissions."
+          }
+        }
+        $identity = & `
+          "$env:CLEARENT_PLATFORM_DIRECTORY/scripts/Assert-ClearentKubernetesContext.ps1" `
+          -KubeconfigPath $path `
+          -Environment $env:CLEARENT_DEPLOYMENT_ENVIRONMENT `
+          -Namespace $env:CLEARENT_NAMESPACE `
+          -ExpectedApiServerSha256 $env:CLEARENT_EXPECTED_API_SERVER_SHA256
+        "CLEARENT_KUBERNETES_CONTEXT=$($identity.Context)" >> $env:GITHUB_ENV
+        "CLEARENT_KUBERNETES_CLUSTER=$($identity.Cluster)" >> $env:GITHUB_ENV
+        "CLEARENT_KUBERNETES_API_SERVER_SHA256=$($identity.ApiServerSha256)" >> $env:GITHUB_ENV
+        "CLEARENT_KUBERNETES_IDENTITY_VERIFIED=true" >> $env:GITHUB_ENV
+        "KUBECONFIG=$path" >> $env:GITHUB_ENV
+
+    - name: Verify deployment runner prerequisites
+      shell: pwsh
+      run: |
+        foreach ($command in @("helm", "kubectl", "pwsh")) {
+          if ($null -eq (Get-Command $command -ErrorAction SilentlyContinue)) {
+            throw "Required deployment command '$command' is not installed on this runner."
+          }
+        }
+
+    - name: Validate core deployment inputs
+      shell: pwsh
+      run: |
+        $agaveEnabled = [Convert]::ToBoolean($env:CLEARENT_AGAVE_ENABLED)
+        & "$env:CLEARENT_PLATFORM_DIRECTORY/scripts/Invoke-PipelineValidation.ps1" `
+          -ImageTag $env:CLEARENT_IMAGE_TAG `
+          -AppType $env:CLEARENT_APPLICATION_TYPE `
+          -AppFramework $env:CLEARENT_APPLICATION_FRAMEWORK `
+          -AppSize $env:CLEARENT_APPLICATION_SIZE `
+          -ReleaseName $env:CLEARENT_RELEASE_NAME `
+          -Namespace $env:CLEARENT_NAMESPACE `
+          -Environment $env:CLEARENT_CONFIG_ENVIRONMENT `
+          -DeploymentEnvironment $env:CLEARENT_DEPLOYMENT_ENVIRONMENT `
+          -ReplicaCount $env:CLEARENT_REPLICA_COUNT `
+          -UseApplicationManifests $false `
+          -CronSchedule $env:CLEARENT_CRON_JOB_SCHEDULE `
+          -AgaveEnabled $agaveEnabled `
+          -RepositoryName $env:CLEARENT_REPOSITORY_NAME
+
+    - name: Download pinned Agave CLI
+      if: ${{ inputs.enable-agave == 'true' }}
+      shell: pwsh
+      env:
+        AGAVE_AZURE_DEVOPS_PAT: ${{ inputs.agave-package-read-token }}
+      run: |
+        & "$env:CLEARENT_PLATFORM_DIRECTORY/scripts/Get-AgaveCliPackage.ps1" `
+          -DestinationDirectory $env:CLEARENT_AGAVE_CLI_DIRECTORY `
+          -Version $env:CLEARENT_AGAVE_CLI_PINNED_VERSION
+
+    - name: Verify Agave CLI and developer contract
+      if: ${{ inputs.enable-agave == 'true' }}
+      shell: pwsh
+      run: |
+        & "$env:CLEARENT_PLATFORM_DIRECTORY/scripts/Invoke-AgaveCliValidation.ps1" `
+          -PackageDirectory $env:CLEARENT_AGAVE_CLI_DIRECTORY `
+          -ProjectDirectory $env:CLEARENT_APPLICATION_DIRECTORY `
+          -Application $env:CLEARENT_RELEASE_NAME `
+          -ExpectedVersion $env:CLEARENT_AGAVE_CLI_PINNED_VERSION
+
+    - name: Capture Agave CLI evidence
+      if: ${{ always() && inputs.enable-agave == 'true' }}
+      shell: pwsh
+      run: >-
+        & "$env:GITHUB_ACTION_PATH/main.ps1" -Mode MapAgaveCli
+
+    - name: Install pinned YAML dependency
+      shell: pwsh
+      run: >-
+        & "$env:CLEARENT_PLATFORM_DIRECTORY/scripts/Install-AgaveDependencies.ps1"
+
+    - name: Apply Agave policy and sanitise contract
+      shell: pwsh
+      run: |
+        $agaveEnabled = [Convert]::ToBoolean($env:CLEARENT_AGAVE_ENABLED)
+        & "$env:CLEARENT_PLATFORM_DIRECTORY/scripts/Invoke-AgaveEngine.ps1" `
+          -HelmChartDir $env:CLEARENT_CHART_DIRECTORY `
+          -WorkspaceSourceDir $env:CLEARENT_APPLICATION_DIRECTORY `
+          -AgaveEnabled $agaveEnabled `
+          -ReleaseName $env:CLEARENT_RELEASE_NAME `
+          -Environment $env:CLEARENT_CONFIG_ENVIRONMENT `
+          -RepositoryName $env:CLEARENT_REPOSITORY_NAME `
+          -RepositoryOwner $env:CLEARENT_REPOSITORY_OWNER `
+          -DeploymentEnvironment $env:CLEARENT_DEPLOYMENT_ENVIRONMENT `
+          -Namespace $env:CLEARENT_NAMESPACE `
+          -PipelineProvider github_actions `
+          -Organisation $env:CLEARENT_REPOSITORY_OWNER
+
+    - name: Capture effective Agave policy
+      if: ${{ always() }}
+      shell: pwsh
+      run: >-
+        & "$env:GITHUB_ACTION_PATH/main.ps1" -Mode MapAgave
+
+    - name: Start deployment timing
+      shell: pwsh
+      run: >-
+        & "$env:CLEARENT_PLATFORM_DIRECTORY/scripts/Start-DeploymentTiming.ps1"
+
+    - name: Capture deployment timing
+      if: ${{ always() }}
+      shell: pwsh
+      run: >-
+        & "$env:GITHUB_ACTION_PATH/main.ps1" -Mode MapTiming
+
+    - name: Apply Kubernetes TLS policy
+      shell: pwsh
+      run: >-
+        & "$env:CLEARENT_PLATFORM_DIRECTORY/scripts/Set-KubernetesTlsVerification.ps1"
+
+    - name: Validate Helm candidate
+      shell: pwsh
+      run: >-
+        & "$env:CLEARENT_PLATFORM_DIRECTORY/scripts/Invoke-ClearentHelmValidation.ps1"
+
+    - name: Run guarded Helm deployment
+      shell: pwsh
+      run: >-
+        & "$env:CLEARENT_PLATFORM_DIRECTORY/scripts/Invoke-ClearentHelmDeployment.ps1"
+
+    - name: Capture Helm transaction evidence
+      if: ${{ always() }}
+      shell: pwsh
+      run: >-
+        & "$env:GITHUB_ACTION_PATH/main.ps1" -Mode MapHelm
+
+    - name: Mark deployment successful
+      if: ${{ success() }}
+      shell: pwsh
+      run: >-
+        & "$env:GITHUB_ACTION_PATH/main.ps1" -Mode MarkSucceeded
+
+    - name: Publish Coralogix-compatible Kubernetes event
+      if: ${{ always() && env.CLEARENT_KUBERNETES_IDENTITY_VERIFIED == 'true' }}
+      continue-on-error: true
+      shell: pwsh
+      run: >-
+        & "$env:CLEARENT_PLATFORM_DIRECTORY/scripts/Publish-ClearentDeploymentEvent.ps1"
+
+    - name: Remove environment-scoped Kubernetes credential
+      id: credential_cleanup
+      if: ${{ always() }}
+      continue-on-error: true
+      shell: pwsh
+      run: |
+        $workingDirectory = [IO.Path]::GetFullPath(
+          $env:CLEARENT_WORKING_DIRECTORY
+        )
+        $kubeconfigPath = [IO.Path]::GetFullPath(
+          (Join-Path $workingDirectory "kubeconfig")
+        )
+        $prefix = $workingDirectory.TrimEnd(
+          [IO.Path]::DirectorySeparatorChar,
+          [IO.Path]::AltDirectorySeparatorChar
+        ) + [IO.Path]::DirectorySeparatorChar
+        if (-not $kubeconfigPath.StartsWith(
+          $prefix,
+          [StringComparison]::Ordinal
+        )) {
+          throw "The kubeconfig cleanup path is outside the isolated workspace."
+        }
+        if (Test-Path -LiteralPath $kubeconfigPath) {
+          Remove-Item -LiteralPath $kubeconfigPath -Force
+        }
+        if (Test-Path -LiteralPath $kubeconfigPath) {
+          throw "The environment kubeconfig could not be removed."
+        }
+
+    - name: Capture credential cleanup outcome
+      if: ${{ always() }}
+      shell: pwsh
+      env:
+        CLEARENT_CREDENTIAL_CLEANUP_OUTCOME: ${{ steps.credential_cleanup.outcome }}
+      run: >-
+        & "$env:GITHUB_ACTION_PATH/main.ps1" -Mode MapCredentialCleanup
+
+    - name: Emit canonical deployment report
+      id: report
+      if: ${{ always() }}
+      shell: pwsh
+      run: >-
+        & "$env:GITHUB_ACTION_PATH/main.ps1" -Mode WriteReport
+
+    - name: Enforce credential cleanup
+      if: ${{ always() && steps.credential_cleanup.outcome != 'success' }}
+      shell: pwsh
+      run: |
+        throw "The environment kubeconfig could not be removed safely."

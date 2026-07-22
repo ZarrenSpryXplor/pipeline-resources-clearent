@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Agave shared-source catalogue",
+  "description": "Platform-owned catalogue of globally available shared Keeper record titles and the GitHub organisation scopes allowed to consume them.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "apiVersion",
+    "kind",
+    "callerScopes",
+    "sources"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "./agave-shared-sources.schema.json"
+    },
+    "apiVersion": {
+      "const": "agave.platform.xplor/v1alpha1"
+    },
+    "kind": {
+      "const": "AgaveSharedSourceCatalogue"
+    },
+    "callerScopes": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "provider",
+          "organisation"
+        ],
+        "properties": {
+          "provider": {
+            "const": "github_actions"
+          },
+          "organisation": {
+            "$ref": "#/definitions/githubOrganisation"
+          }
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "maxItems": 5000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceRef",
+          "properties",
+          "attachments"
+        ],
+        "properties": {
+          "sourceRef": {
+            "$ref": "#/definitions/sharedName",
+            "description": "Exact, case-sensitive Keeper record title. The same title must be unique in every environment Shared Folder in which the source is available."
+          },
+          "properties": {
+            "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._:@/-]{0,252}$"
+            }
+          },
+          "attachments": {
+            "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$"
+            }
+          }
+        },
+        "anyOf": [
+          {
+            "properties": {
+              "properties": {
+                "minItems": 1
+              }
+            }
+          },
+          {
+            "properties": {
+              "attachments": {
+                "minItems": 1
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "githubOrganisation": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 39,
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
+    },
+    "sharedName": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 63,
+      "pattern": "^shared-[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$"
+    }
+  }
+}

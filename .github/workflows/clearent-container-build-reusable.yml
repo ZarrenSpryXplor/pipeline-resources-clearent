@@ -1,0 +1,208 @@
+name: Clearent container build
+
+on:
+  workflow_call:
+    inputs:
+      framework:
+        description: dotnet, java, angular, vue or py.
+        required: true
+        type: string
+      application_name:
+        description: Canonical application and default image repository name.
+        required: true
+        type: string
+      image_tag:
+        description: Optional canonical image tag; generated when omitted.
+        required: false
+        type: string
+        default: ""
+      push_latest:
+        description: Also publish latest for legacy compatibility.
+        required: false
+        type: boolean
+        default: true
+      dockerfile:
+        description: Optional Dockerfile path relative to the application repository.
+        required: false
+        type: string
+        default: ""
+      build_context:
+        description: Docker context relative to the application repository.
+        required: false
+        type: string
+        default: .
+      build_arguments:
+        description: Non-secret Docker build arguments, one KEY=VALUE per line.
+        required: false
+        type: string
+        default: ""
+    outputs:
+      image_tag:
+        description: Canonical generated or supplied image tag.
+        value: ${{ jobs.build.outputs.image-tag }}
+      image_reference:
+        description: Canonical registry/repository:tag reference.
+        value: ${{ jobs.build.outputs.image-reference }}
+      image_digest:
+        description: Published image digest.
+        value: ${{ jobs.build.outputs.image-digest }}
+    secrets:
+      CLEARENT_PLATFORM_READ_TOKEN:
+        description: Read token used to retrieve the pinned central implementation.
+        required: true
+      ACR_USERNAME:
+        description: Xplor shared ACR username.
+        required: true
+      ACR_PASSWORD:
+        description: Xplor shared ACR password.
+        required: true
+      AZURE_ARTIFACTS_PAT:
+        description: Optional package token exposed to Docker only as a BuildKit secret.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Resolve trusted container implementation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: none
+      id-token: write
+    outputs:
+      workflow_ref: ${{ steps.workflow-identity.outputs.workflow-ref }}
+      workflow_sha: ${{ steps.workflow-identity.outputs.workflow-sha }}
+    steps:
+      - name: Validate build inputs
+        shell: pwsh
+        env:
+          CLEARENT_PLATFORM_READ_TOKEN: ${{ secrets.CLEARENT_PLATFORM_READ_TOKEN }}
+          CLEARENT_FRAMEWORK: ${{ inputs.framework }}
+          CLEARENT_APPLICATION_NAME: ${{ inputs.application_name }}
+          CLEARENT_REPOSITORY: ${{ github.repository }}
+          CLEARENT_REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CLEARENT_PLATFORM_READ_TOKEN)) {
+            throw "CLEARENT_PLATFORM_READ_TOKEN is required."
+          }
+          if ($env:CLEARENT_REPOSITORY_OWNER -cne "xplor-pay") {
+            throw "Clearent image publication may be called only by repositories owned by xplor-pay."
+          }
+          if ($env:CLEARENT_FRAMEWORK -cnotin @("dotnet", "java", "angular", "vue", "py")) {
+            throw "framework must be dotnet, java, angular, vue or py."
+          }
+          if ($env:CLEARENT_APPLICATION_NAME -cnotmatch '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$') {
+            throw "application_name must be a canonical lowercase DNS label."
+          }
+          $repositoryParts = @($env:CLEARENT_REPOSITORY.Split("/", 2))
+          if (
+            $repositoryParts.Count -ne 2 -or
+            $repositoryParts[1] -cne $env:CLEARENT_APPLICATION_NAME
+          ) {
+            throw "application_name must exactly match the calling repository name."
+          }
+
+      - name: Resolve called workflow identity
+        id: workflow-identity
+        shell: pwsh
+        env:
+          CLEARENT_EXPECTED_WORKFLOW_PATH: .github/workflows/clearent-container-build-reusable.yml
+        run: |
+          $ErrorActionPreference = "Stop"
+          $audience = "xplor-pay/github-actions"
+          if (
+            [string]::IsNullOrWhiteSpace($env:ACTIONS_ID_TOKEN_REQUEST_URL) -or
+            [string]::IsNullOrWhiteSpace($env:ACTIONS_ID_TOKEN_REQUEST_TOKEN)
+          ) {
+            throw "GitHub OIDC is required to resolve the called workflow revision."
+          }
+          $separator = if ($env:ACTIONS_ID_TOKEN_REQUEST_URL.Contains("?")) { "&" } else { "?" }
+          $requestUri = "{0}{1}audience={2}" -f
+            $env:ACTIONS_ID_TOKEN_REQUEST_URL,
+            $separator,
+            [Uri]::EscapeDataString($audience)
+          $response = Invoke-RestMethod -Uri $requestUri -Headers @{
+            Authorization = "bearer $($env:ACTIONS_ID_TOKEN_REQUEST_TOKEN)"
+          }
+          $segments = @($response.value.Split("."))
+          if ($segments.Count -ne 3) {
+            throw "GitHub returned an invalid OIDC token."
+          }
+          $payloadText = $segments[1].Replace("-", "+").Replace("_", "/")
+          switch ($payloadText.Length % 4) {
+            0 { }
+            2 { $payloadText += "==" }
+            3 { $payloadText += "=" }
+            default { throw "GitHub returned an invalid OIDC payload." }
+          }
+          $payload = [Text.Encoding]::UTF8.GetString(
+            [Convert]::FromBase64String($payloadText)
+          ) | ConvertFrom-Json
+          $expectedPrefix = "xplor-pay/github-actions/$($env:CLEARENT_EXPECTED_WORKFLOW_PATH)@"
+          $workflowRef = [string]$payload.job_workflow_ref
+          $workflowSha = ([string]$payload.job_workflow_sha).ToLowerInvariant()
+          $calledReference = if ($workflowRef.StartsWith($expectedPrefix, [StringComparison]::Ordinal)) {
+            $workflowRef.Substring($expectedPrefix.Length)
+          } else {
+            ""
+          }
+          if (
+            $payload.iss -cne "https://token.actions.githubusercontent.com" -or
+            @($payload.aud) -cnotcontains $audience -or
+            $workflowSha -cnotmatch "^[0-9a-f]{40}$" -or
+            $calledReference -cne $workflowSha -or
+            [long]$payload.exp -le [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+          ) {
+            throw "The reusable workflow identity is invalid or is not pinned to a full commit SHA."
+          }
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "workflow-ref=$workflowRef"
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "workflow-sha=$workflowSha"
+
+  build:
+    name: Build ${{ inputs.application_name }}
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    outputs:
+      image-tag: ${{ steps.container.outputs.image-tag }}
+      image-reference: ${{ steps.container.outputs.image-reference }}
+      image-digest: ${{ steps.container.outputs.digest }}
+    steps:
+      - name: Check out application revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          path: application
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Check out pinned container implementation
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: xplor-pay/github-actions
+          ref: ${{ needs.preflight.outputs.workflow_sha }}
+          token: ${{ secrets.CLEARENT_PLATFORM_READ_TOKEN }}
+          path: platform
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Build, publish and attest image
+        id: container
+        uses: ./platform/.github/actions/container/build-push
+        with:
+          application-directory: ${{ github.workspace }}/application
+          registry: xplorcrsharedregistry.azurecr.io
+          registry-username: ${{ secrets.ACR_USERNAME }}
+          registry-password: ${{ secrets.ACR_PASSWORD }}
+          image-repository: nexus/${{ inputs.application_name }}
+          image-tag: ${{ inputs.image_tag }}
+          push-latest: ${{ inputs.push_latest }}
+          dockerfile: ${{ inputs.dockerfile }}
+          context: ${{ inputs.build_context }}
+          build-arguments: ${{ inputs.build_arguments }}
+          azure-artifacts-pat: ${{ secrets.AZURE_ARTIFACTS_PAT }}

@@ -1,0 +1,64 @@
+{{- if and
+      (eq (include "common.isNetworked" .) "true")
+      .Values.ingress.path
+      (not .Values.ingress.behindEdgeService)
+}}
+{{- $host := include "common.ingressHost" . -}}
+{{- $sslCertSecret := .Values.ingress.sslCertSecret -}}
+
+{{- if .Values.ingress.tls }}
+{{- $sslCertSecret = required
+      "ingress.sslCertSecret is required when ingress.tls is enabled"
+      $sslCertSecret
+-}}
+{{- end }}
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+
+metadata:
+  name: {{ include "app.name" . | quote }}
+  namespace: {{ include "app.namespace" . | quote }}
+  labels:
+    {{- include "common.labels" . | nindent 4 }}
+  annotations:
+    {{- include "common.annotations" . | nindent 4 }}
+    haproxy-ingress.github.io/path-type: "begin"
+    haproxy-ingress.github.io/timeout-server: "300s"
+    haproxy-ingress.github.io/timeout-server-fin: "300s"
+    haproxy-ingress.github.io/secure-backends: {{ .Values.ingress.backendTls | toString | quote }}
+    haproxy-ingress.github.io/config-backend: {{ .Values.ingress.configSnippet | quote }}
+
+spec:
+  ingressClassName: haproxy
+
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.path | quote }}
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ include "app.name" . | quote }}
+                port:
+                  number: {{ .Values.ingress.backendTls | ternary 443 80 }}
+
+{{ if .Values.ingress.path2 }}
+          - path: {{ .Values.ingress.path2 | quote }}
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ include "app.name" . | quote }}
+                port:
+                  number: {{ .Values.ingress.backendTls | ternary 443 80 }}
+{{ end }}
+
+{{ if .Values.ingress.tls }}
+  tls:
+    - hosts:
+        - {{ $host | quote }}
+      secretName: {{ $sslCertSecret | quote }}
+{{ end }}
+
+{{- end }}

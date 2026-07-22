@@ -1,0 +1,216 @@
+{{- $environment := include "common.environment" . -}}
+{{- $agaveEnabled := eq (include "common.agaveEnabled" .) "true" -}}
+{{- $applicationType := lower (default "" .Values.applicationType) -}}
+{{- $isCronJob := eq (include "common.isCronJob" .) "true" -}}
+{{- $isWebApplication := eq (include "common.isNetworked" .) "true" -}}
+{{- $isDeployment := eq (include "common.isDeployment" .) "true" -}}
+{{- $hasMappings := eq (include "common.hasSecrets" .) "true" -}}
+{{- $hasBinary := eq (include "common.hasBinary" .) "true" -}}
+{{- $kerberos := .Values.kerberos | default dict -}}
+{{- $kerberosEnabled := get $kerberos "enabled" | default false -}}
+{{- $platformConfig := .Values.platformConfig | default dict -}}
+{{- $requestedSyncMode := get $platformConfig "syncMode" | default "governed" | toString | lower -}}
+{{- $refreshInterval := get $platformConfig "refreshInterval" | default "6h" | toString -}}
+{{- $agave := .Values.agave | default dict -}}
+{{- $rolloutGate := get $agave "rolloutGate" | default "closed" | toString | lower -}}
+{{- $effectiveSyncMode := "governed" -}}
+{{- $syncPolicyReason := "application-requested-governed" -}}
+{{- if eq $requestedSyncMode "continuous" -}}
+{{- if regexMatch "(^|-)dev$" $environment -}}
+{{- $effectiveSyncMode = "continuous" -}}
+{{- $syncPolicyReason = "development-policy-allows-continuous" -}}
+{{- else -}}
+{{- $syncPolicyReason = "environment-policy-requires-governed" -}}
+{{- end -}}
+{{- end -}}
+{{- if and $agaveEnabled (eq $rolloutGate "closed") }}
+===============================================================================
+🌵 AGAVE CANDIDATE APPLIED: {{ .Release.Name }}
+===============================================================================
+RELEASE REVISION: {{ .Release.Revision }}
+NAMESPACE:        {{ include "app.namespace" . }}
+ROLLOUT GATE:     CLOSED
+-------------------------------------------------------------------------------
+CHANGES:
+  Candidate release resources were applied with workload activation held.
+NEXT:
+  The platform will verify fresh reconciliation and any target Secrets before
+  opening the workload gate.
+===============================================================================
+{{- else }}
+===============================================================================
+🎉 HELM RELEASE STATUS: {{ .Release.Name }}
+===============================================================================
+CHART VERSION:    {{ .Chart.Version }}
+IMAGE VERSION:    {{ .Values.image.tag | default "not specified" }}
+ENVIRONMENT:      {{ $environment }}
+NAMESPACE:        {{ include "app.namespace" . }}
+WORKLOAD TYPE:    {{ $applicationType | default "not specified" }}
+FRAMEWORK:        {{ .Values.applicationFramework | default "not specified" }}
+SIZE / CLASS:     {{ .Values.applicationSize | upper }} / {{ .Values.serviceClassification | upper }}
+RELEASE REVISION: {{ .Release.Revision }}
+{{- if .Values.pipeline.runUri }}
+PIPELINE:         {{ .Values.pipeline.name }}
+PIPELINE RUN:     {{ .Values.pipeline.runUri }}
+{{- end }}
+-------------------------------------------------------------------------------
+🔐 CONFIGURATION PLATFORM
+-------------------------------------------------------------------------------
+{{- if $agaveEnabled }}
+ENGINE:           🌵 Agave
+CONTRACT:         Declarative application-variable contract
+REQUESTED SYNC:   {{ $requestedSyncMode | upper }}
+EFFECTIVE SYNC:   {{ $effectiveSyncMode | upper }}
+POLICY REASON:    {{ $syncPolicyReason }}
+ROLLOUT GATE:     {{ $rolloutGate | upper }}
+{{- if eq $effectiveSyncMode "continuous" }}
+REFRESH:          {{ $refreshInterval }}
+{{- else }}
+REFRESH:          Deployment-controlled reconciliation
+{{- end }}
+MAPPINGS PRESENT: {{ $hasMappings }}
+BINARY MAPPINGS:  {{ $hasBinary }}
+TARGET SECRET:    {{ include "app.renderedConfigSecretName" . }}
+{{- if eq $rolloutGate "closed" }}
+ACTIVATION:       Pending fresh ESO and target Secret verification by the
+                  platform deployment transaction.
+{{- end }}
+
+Check the Agave reconciliation state:
+  kubectl get externalsecret/{{ include "app.externalSecretName" . }} \
+    --namespace {{ include "app.namespace" . }}
+
+View reconciliation conditions and Kubernetes events:
+  kubectl describe externalsecret/{{ include "app.externalSecretName" . }} \
+    --namespace {{ include "app.namespace" . }}
+
+Confirm that the projected Secret exists:
+  kubectl get secret/{{ include "app.renderedConfigSecretName" . }} \
+    --namespace {{ include "app.namespace" . }}
+{{- else }}
+ENGINE:           🍹 Legacy Tequila
+CONFIGURATION:    Application configuration is retrieved by the Tequila
+                  initialisation container before the workload starts.
+{{- end }}
+{{- if $kerberosEnabled }}
+KERBEROS:         🔑 Enabled
+CREDENTIAL:       {{ include "app.kerberosCredentialsName" . }}
+
+Check the Kerberos credential reconciliation state:
+  kubectl get externalsecret/{{ include "app.kerberosExternalSecretName" . }} \
+    --namespace {{ include "app.namespace" . }}
+{{- end }}
+-------------------------------------------------------------------------------
+📦 WORKLOAD STATUS
+-------------------------------------------------------------------------------
+{{- if $isCronJob }}
+SCHEDULE:         {{ .Values.cronJobSchedule | quote }}
+SUSPENDED:        {{ ternary true (default false .Values.cronJobSuspended) (and $agaveEnabled (eq $rolloutGate "closed")) }}
+{{- if ne .Values.startingDeadlineSeconds nil }}
+START DEADLINE:   {{ .Values.startingDeadlineSeconds }} seconds
+{{- end }}
+
+View the CronJob:
+  kubectl get cronjob/{{ include "app.cronJobName" . }} \
+    --namespace {{ include "app.namespace" . }}
+
+View recent Jobs created by this CronJob:
+  kubectl get jobs \
+    --namespace {{ include "app.namespace" . }} \
+    --selector=app={{ include "app.name" . }} \
+    --sort-by=.metadata.creationTimestamp
+
+Create a manual Job:
+  kubectl create job \
+    --from=cronjob/{{ include "app.cronJobName" . }} \
+    {{ include "app.manualJobPrefix" . }}-manual-$(date +%s) \
+    --namespace {{ include "app.namespace" . }}
+{{- else if $isDeployment }}
+Check the Deployment rollout:
+  kubectl rollout status deployment/{{ include "app.name" . }} \
+    --namespace {{ include "app.namespace" . }}
+
+View the Deployment:
+  kubectl get deployment/{{ include "app.name" . }} \
+    --namespace {{ include "app.namespace" . }}
+
+List application pods:
+  kubectl get pods \
+    --namespace {{ include "app.namespace" . }} \
+    --selector=app={{ include "app.name" . }}
+{{- if gt (int .Values.replicas) 1 }}
+
+View the PodDisruptionBudget:
+  kubectl get pdb/{{ include "app.pdbName" . }} \
+    --namespace {{ include "app.namespace" . }}
+{{- end }}
+{{- else }}
+No recognised workload type was rendered.
+{{- end }}
+-------------------------------------------------------------------------------
+📜 APPLICATION LOGS
+-------------------------------------------------------------------------------
+{{- if $isCronJob }}
+First identify the required Job:
+  kubectl get jobs \
+    --namespace {{ include "app.namespace" . }} \
+    --selector=app={{ include "app.name" . }} \
+    --sort-by=.metadata.creationTimestamp
+
+Then stream its logs:
+  kubectl logs \
+    --namespace {{ include "app.namespace" . }} \
+    job/<job-name> \
+    --all-containers=true \
+    --tail=100
+{{- else if $isDeployment }}
+Stream the Deployment logs:
+  kubectl logs \
+    --namespace {{ include "app.namespace" . }} \
+    deployment/{{ include "app.name" . }} \
+    --all-containers=true \
+    --follow \
+    --tail=100
+{{- else }}
+No persistent workload logs are available for the selected application type.
+{{- end }}
+-------------------------------------------------------------------------------
+🌐 NETWORK ACCESS
+-------------------------------------------------------------------------------
+{{- if $isWebApplication }}
+{{- if .Values.ingress.path }}
+Ingress URL:
+  http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.subdomain }}.{{ .Values.ingress.domain }}{{ .Values.ingress.path }}
+{{- if .Values.ingress.path2 }}
+
+Additional ingress URL:
+  http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.subdomain }}.{{ .Values.ingress.domain }}{{ .Values.ingress.path2 }}
+{{- end }}
+
+INGRESS TLS:      {{ .Values.ingress.tls }}
+BACKEND TLS:      {{ .Values.ingress.backendTls }}
+BEHIND EDGE:      {{ .Values.ingress.behindEdgeService }}
+{{- else }}
+The application has no configured ingress path.
+
+Port-forward the Service for local testing:
+  kubectl port-forward \
+    service/{{ include "app.name" . }} \
+    8080:health \
+    --namespace {{ include "app.namespace" . }}
+{{- if .Values.healthCheck.path }}
+
+Test the health endpoint:
+  curl http://127.0.0.1:8080{{ .Values.healthCheck.path }}
+{{- end }}
+{{- end }}
+{{- else if eq $applicationType "background_service" }}
+This is a background workload and does not expose an ingress route or
+Kubernetes Service.
+{{- else if $isCronJob }}
+This is a scheduled workload and does not expose a persistent network route.
+{{- else }}
+No network guidance is available for the selected application type.
+{{- end }}
+===============================================================================
+{{- end }}

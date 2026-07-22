@@ -1,0 +1,1850 @@
+{
+  "id": "nGTZ0wnUNZvSDVsMkXfGm",
+  "name": "Application Deployment Performance & Reliability",
+  "description": "Developer and SRE reliability, retry, failure-stage and latency telemetry for Clearent GitHub Actions deployment attempts.",
+  "layout": {
+    "sections": [
+      {
+        "id": {
+          "value": "a22fd9b8-15d2-4106-b4d4-d5a60a438754"
+        },
+        "rows": [
+          {
+            "id": {
+              "value": "40cbf087-a762-4e52-ba12-7802e1ad5e40"
+            },
+            "appearance": {
+              "height": 17
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "a717b9ea-db33-472c-83b1-4512db593dc4"
+                },
+                "title": "Dashboard Guide",
+                "definition": {
+                  "markdown": {
+                    "markdownText": "# Application Deployment Performance & Reliability\n\nOne Kubernetes Event represents one GitHub Actions deployment job attempt. This dashboard answers deployment reliability, retry, failure-stage and latency questions.\n\n## Included\n- Attempt success, failure, retry and first-attempt success\n- Total and Helm duration, failure stage and non-Helm time\n- Environment, application and workload trends\n- Deployment identity and Kubernetes Event context\n- Agave versus legacy configuration as a deployment dimension\n\nDetailed Agave contract snapshots are intentionally kept in the separate **Agave Contract & Synchronisation Health** dashboard.\n\nThe current event contract reports Agave configuration at deployment time; it does not yet report runtime synchronisation executions or API-call volume."
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": {
+              "value": "c5dc1fdc-7c05-4f44-a6d2-3bc68a75bd68"
+            },
+            "appearance": {
+              "height": 22
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "d371c35e-bd73-43e0-ae79-f065686ca14b"
+                },
+                "title": "Retry Attempt Rate",
+                "definition": {
+                  "gauge": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | aggregate count() as total, count_if($d.job_attempt:number > 1) as retries | create retry_rate from if(total > 0, retries / total * 100, 0) | choose retry_rate"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "min": 0,
+                    "max": 100,
+                    "showInnerArc": true,
+                    "showOuterArc": true,
+                    "unit": "UNIT_PERCENT",
+                    "thresholds": [
+                      {
+                        "from": 0,
+                        "color": "var(--c-visualization-green-600)",
+                        "label": "Healthy"
+                      },
+                      {
+                        "from": 5,
+                        "color": "var(--c-visualization-yellow-600)",
+                        "label": "Elevated"
+                      },
+                      {
+                        "from": 15,
+                        "color": "var(--c-visualization-red-600)",
+                        "label": "Critical"
+                      }
+                    ],
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                    "thresholdBy": "THRESHOLD_BY_UNSPECIFIED",
+                    "decimal": 2,
+                    "thresholdType": "THRESHOLD_TYPE_ABSOLUTE",
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": false,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "legendBy": "LEGEND_BY_GROUPS",
+                    "displaySeriesName": true,
+                    "arcDisplay": {
+                      "valueArc": true,
+                      "thresholdArc": true
+                    },
+                    "showMinMax": false
+                  }
+                },
+                "description": "Retry attempts divided by all deployment attempts in the selected timeframe."
+              },
+              {
+                "id": {
+                  "value": "f6abb9e8-4cad-4d4a-a968-dfab3638558e"
+                },
+                "title": "Unparsed Deployment Events",
+                "definition": {
+                  "gauge": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application == null | aggregate count() as unparsed_events"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "min": 0,
+                    "max": 20,
+                    "showInnerArc": false,
+                    "showOuterArc": false,
+                    "unit": "UNIT_NUMBER",
+                    "thresholds": [
+                      {
+                        "from": 0,
+                        "color": "var(--c-visualization-green-600)",
+                        "label": "Healthy"
+                      },
+                      {
+                        "from": 1,
+                        "color": "var(--c-visualization-yellow-600)",
+                        "label": "Unparsed"
+                      },
+                      {
+                        "from": 3,
+                        "color": "var(--c-visualization-red-600)",
+                        "label": "Critical"
+                      }
+                    ],
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                    "thresholdBy": "THRESHOLD_BY_UNSPECIFIED",
+                    "decimal": 0,
+                    "thresholdType": "THRESHOLD_TYPE_ABSOLUTE",
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": false,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "legendBy": "LEGEND_BY_GROUPS",
+                    "displaySeriesName": true,
+                    "arcDisplay": {
+                      "valueArc": false,
+                      "thresholdArc": false
+                    },
+                    "showMinMax": false
+                  }
+                },
+                "description": "Clearent-shaped deployment Events that did not produce the parsed telemetry object. Historical Events ingested before the rule was enabled may be included."
+              }
+            ]
+          }
+        ],
+        "options": {
+          "internal": {}
+        }
+      },
+      {
+        "id": {
+          "value": "9f7515ce-a1c0-4780-9698-506db8aa9968"
+        },
+        "rows": [
+          {
+            "id": {
+              "value": "55f7a5e9-2c3b-4f54-821d-0130350dc0f0"
+            },
+            "appearance": {
+              "height": 22
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "2c43dd9c-1b4b-4f99-ab2e-5bba7274e8db"
+                },
+                "title": "Total Deployment Attempts",
+                "definition": {
+                  "gauge": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | aggregate count() as total_attempts"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "min": 0,
+                    "max": 1000,
+                    "showInnerArc": false,
+                    "showOuterArc": false,
+                    "unit": "UNIT_NUMBER",
+                    "thresholds": [
+                      {
+                        "from": 0,
+                        "color": "var(--c-visualization-green-600)",
+                        "label": "Attempts"
+                      }
+                    ],
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                    "thresholdBy": "THRESHOLD_BY_UNSPECIFIED",
+                    "decimal": 0,
+                    "thresholdType": "THRESHOLD_TYPE_ABSOLUTE",
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": false,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "legendBy": "LEGEND_BY_GROUPS",
+                    "displaySeriesName": true,
+                    "arcDisplay": {
+                      "valueArc": false,
+                      "thresholdArc": false
+                    },
+                    "showMinMax": false
+                  }
+                },
+                "description": "One Event per GitHub Actions deployment job attempt, including retries."
+              },
+              {
+                "id": {
+                  "value": "ebadb06a-79bd-488c-8236-9185affaa748"
+                },
+                "title": "Failed Deployment Attempts",
+                "definition": {
+                  "gauge": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.result == 'Failed' | aggregate count() as failed_attempts"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "min": 0,
+                    "max": 20,
+                    "showInnerArc": false,
+                    "showOuterArc": false,
+                    "unit": "UNIT_NUMBER",
+                    "thresholds": [
+                      {
+                        "from": 0,
+                        "color": "var(--c-visualization-green-600)",
+                        "label": "Healthy"
+                      },
+                      {
+                        "from": 1,
+                        "color": "var(--c-visualization-yellow-600)",
+                        "label": "Failures"
+                      },
+                      {
+                        "from": 3,
+                        "color": "var(--c-visualization-red-600)",
+                        "label": "Critical"
+                      }
+                    ],
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                    "thresholdBy": "THRESHOLD_BY_UNSPECIFIED",
+                    "decimal": 0,
+                    "thresholdType": "THRESHOLD_TYPE_ABSOLUTE",
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": false,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "legendBy": "LEGEND_BY_GROUPS",
+                    "displaySeriesName": true,
+                    "arcDisplay": {
+                      "valueArc": false,
+                      "thresholdArc": false
+                    },
+                    "showMinMax": false
+                  }
+                },
+                "description": "All failed attempts, including failures before Helm starts."
+              },
+              {
+                "id": {
+                  "value": "3163c87e-648e-4bed-83e9-2eeec031f7c4"
+                },
+                "title": "Attempt Success Rate",
+                "definition": {
+                  "gauge": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | aggregate count() as total, count_if($d.result == 'Succeeded') as succeeded | create success_rate from if(total > 0, succeeded / total * 100, 0) | choose success_rate"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "min": 0,
+                    "max": 100,
+                    "showInnerArc": true,
+                    "showOuterArc": true,
+                    "unit": "UNIT_PERCENT",
+                    "thresholds": [
+                      {
+                        "from": 0,
+                        "color": "var(--c-visualization-red-600)",
+                        "label": "Critical"
+                      },
+                      {
+                        "from": 95,
+                        "color": "var(--c-visualization-yellow-600)",
+                        "label": "Warning"
+                      },
+                      {
+                        "from": 99,
+                        "color": "var(--c-visualization-green-600)",
+                        "label": "Healthy"
+                      }
+                    ],
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                    "thresholdBy": "THRESHOLD_BY_UNSPECIFIED",
+                    "decimal": 2,
+                    "thresholdType": "THRESHOLD_TYPE_ABSOLUTE",
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": false,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "legendBy": "LEGEND_BY_GROUPS",
+                    "displaySeriesName": true,
+                    "arcDisplay": {
+                      "valueArc": true,
+                      "thresholdArc": true
+                    },
+                    "showMinMax": false
+                  }
+                },
+                "description": "Succeeded attempts divided by all deployment attempts."
+              },
+              {
+                "id": {
+                  "value": "39b0c1e3-79f0-4786-afdb-343578b1dc74"
+                },
+                "title": "P95 Successful Attempt Duration",
+                "definition": {
+                  "gauge": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.result == 'Succeeded' | aggregate percentile(0.95, $d.total_duration_seconds:number) as p95_seconds"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "min": 0,
+                    "max": 600,
+                    "showInnerArc": true,
+                    "showOuterArc": true,
+                    "unit": "UNIT_SECONDS",
+                    "thresholds": [
+                      {
+                        "from": 0,
+                        "color": "var(--c-visualization-green-600)",
+                        "label": "Healthy"
+                      },
+                      {
+                        "from": 180,
+                        "color": "var(--c-visualization-yellow-600)",
+                        "label": "Slow"
+                      },
+                      {
+                        "from": 300,
+                        "color": "var(--c-visualization-red-600)",
+                        "label": "Critical"
+                      }
+                    ],
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                    "thresholdBy": "THRESHOLD_BY_UNSPECIFIED",
+                    "decimal": 2,
+                    "thresholdType": "THRESHOLD_TYPE_ABSOLUTE",
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": false,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "legendBy": "LEGEND_BY_GROUPS",
+                    "displaySeriesName": true,
+                    "arcDisplay": {
+                      "valueArc": true,
+                      "thresholdArc": true
+                    },
+                    "showMinMax": false
+                  }
+                },
+                "description": "P95 measured deployment duration for successful attempts only."
+              }
+            ]
+          },
+          {
+            "id": {
+              "value": "5e31d8c4-4148-4bd9-a070-6e451339c001"
+            },
+            "appearance": {
+              "height": 22
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "5e31d8c4-4148-4bd9-a070-6e451339c101"
+                },
+                "title": "Retry Attempts",
+                "definition": {
+                  "gauge": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | aggregate count_if($d.job_attempt:number > 1) as retry_attempts"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "min": 0,
+                    "max": 20,
+                    "showInnerArc": false,
+                    "showOuterArc": false,
+                    "unit": "UNIT_NUMBER",
+                    "thresholds": [
+                      {
+                        "from": 0,
+                        "color": "var(--c-visualization-green-600)",
+                        "label": "No retries"
+                      },
+                      {
+                        "from": 1,
+                        "color": "var(--c-visualization-yellow-600)",
+                        "label": "Retries"
+                      },
+                      {
+                        "from": 5,
+                        "color": "var(--c-visualization-red-600)",
+                        "label": "Elevated"
+                      }
+                    ],
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                    "thresholdBy": "THRESHOLD_BY_UNSPECIFIED",
+                    "decimal": 0,
+                    "thresholdType": "THRESHOLD_TYPE_ABSOLUTE",
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": false,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "legendBy": "LEGEND_BY_GROUPS",
+                    "displaySeriesName": true,
+                    "arcDisplay": {
+                      "valueArc": false,
+                      "thresholdArc": false
+                    },
+                    "showMinMax": false
+                  }
+                },
+                "description": "Attempts where GitHub Actions reports JobAttempt greater than one."
+              },
+              {
+                "id": {
+                  "value": "5e31d8c4-4148-4bd9-a070-6e451339c102"
+                },
+                "title": "First-Attempt Success Rate",
+                "definition": {
+                  "gauge": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.job_attempt:number == 1 | aggregate count() as total, count_if($d.result == 'Succeeded') as succeeded | create success_rate from if(total > 0, succeeded / total * 100, 0) | choose success_rate"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "min": 0,
+                    "max": 100,
+                    "showInnerArc": true,
+                    "showOuterArc": true,
+                    "unit": "UNIT_PERCENT",
+                    "thresholds": [
+                      {
+                        "from": 0,
+                        "color": "var(--c-visualization-red-600)",
+                        "label": "Critical"
+                      },
+                      {
+                        "from": 95,
+                        "color": "var(--c-visualization-yellow-600)",
+                        "label": "Warning"
+                      },
+                      {
+                        "from": 99,
+                        "color": "var(--c-visualization-green-600)",
+                        "label": "Healthy"
+                      }
+                    ],
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                    "thresholdBy": "THRESHOLD_BY_UNSPECIFIED",
+                    "decimal": 2,
+                    "thresholdType": "THRESHOLD_TYPE_ABSOLUTE",
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": false,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "legendBy": "LEGEND_BY_GROUPS",
+                    "displaySeriesName": true,
+                    "arcDisplay": {
+                      "valueArc": true,
+                      "thresholdArc": true
+                    },
+                    "showMinMax": false
+                  }
+                },
+                "description": "Success rate for JobAttempt 1, excluding subsequent retries."
+              },
+              {
+                "id": {
+                  "value": "5e31d8c4-4148-4bd9-a070-6e451339c103"
+                },
+                "title": "Pre-Helm Failures",
+                "definition": {
+                  "gauge": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.result == 'Failed' && $d.helm_result == 'NotStarted' | aggregate count() as pre_helm_failures"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "min": 0,
+                    "max": 20,
+                    "showInnerArc": false,
+                    "showOuterArc": false,
+                    "unit": "UNIT_NUMBER",
+                    "thresholds": [
+                      {
+                        "from": 0,
+                        "color": "var(--c-visualization-green-600)",
+                        "label": "Healthy"
+                      },
+                      {
+                        "from": 1,
+                        "color": "var(--c-visualization-yellow-600)",
+                        "label": "Failures"
+                      },
+                      {
+                        "from": 3,
+                        "color": "var(--c-visualization-red-600)",
+                        "label": "Critical"
+                      }
+                    ],
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                    "thresholdBy": "THRESHOLD_BY_UNSPECIFIED",
+                    "decimal": 0,
+                    "thresholdType": "THRESHOLD_TYPE_ABSOLUTE",
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": false,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "legendBy": "LEGEND_BY_GROUPS",
+                    "displaySeriesName": true,
+                    "arcDisplay": {
+                      "valueArc": false,
+                      "thresholdArc": false
+                    },
+                    "showMinMax": false
+                  }
+                },
+                "description": "Failed attempts where validation or preparation stopped before Helm began."
+              },
+              {
+                "id": {
+                  "value": "5e31d8c4-4148-4bd9-a070-6e451339c104"
+                },
+                "title": "P95 Helm Execution Duration",
+                "definition": {
+                  "gauge": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.helm_result != 'NotStarted' | aggregate percentile(0.95, $d.helm_duration_seconds:number) as p95_helm_seconds"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "min": 0,
+                    "max": 600,
+                    "showInnerArc": true,
+                    "showOuterArc": true,
+                    "unit": "UNIT_SECONDS",
+                    "thresholds": [
+                      {
+                        "from": 0,
+                        "color": "var(--c-visualization-green-600)",
+                        "label": "Healthy"
+                      },
+                      {
+                        "from": 120,
+                        "color": "var(--c-visualization-yellow-600)",
+                        "label": "Slow"
+                      },
+                      {
+                        "from": 240,
+                        "color": "var(--c-visualization-red-600)",
+                        "label": "Critical"
+                      }
+                    ],
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                    "thresholdBy": "THRESHOLD_BY_UNSPECIFIED",
+                    "decimal": 2,
+                    "thresholdType": "THRESHOLD_TYPE_ABSOLUTE",
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": false,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "legendBy": "LEGEND_BY_GROUPS",
+                    "displaySeriesName": true,
+                    "arcDisplay": {
+                      "valueArc": true,
+                      "thresholdArc": true
+                    },
+                    "showMinMax": false
+                  }
+                },
+                "description": "P95 Helm duration, excluding attempts where Helm never started."
+              }
+            ]
+          }
+        ],
+        "options": {
+          "custom": {
+            "name": "Deployment Attempt Health",
+            "description": "Attempt-level reliability, retry, parser-health and latency indicators.",
+            "collapsed": false,
+            "color": {
+              "predefined": "SECTION_PREDEFINED_COLOR_UNSPECIFIED"
+            }
+          }
+        }
+      },
+      {
+        "id": {
+          "value": "b4e32d2e-a6b2-4337-9de2-2ca64378e87f"
+        },
+        "rows": [
+          {
+            "id": {
+              "value": "0de17736-1723-4df2-a521-04557eb5a09a"
+            },
+            "appearance": {
+              "height": 24
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "b041f86d-2759-413c-b348-6feae2c30956"
+                },
+                "title": "Attempt Outcomes Over Time",
+                "description": "Succeeded and failed deployment attempts over the selected timeframe.",
+                "definition": {
+                  "lineChart": {
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": true,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "tooltip": {
+                      "showLabels": false,
+                      "type": "TOOLTIP_TYPE_ALL"
+                    },
+                    "queryDefinitions": [
+                      {
+                        "id": "b620c375-077b-4bd3-a5b0-4af078892c9c",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | groupby $d.result as result, $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate count() as attempts"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_UNSPECIFIED",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "Attempt result",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 0,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      }
+                    ],
+                    "stackedLine": "STACKED_LINE_UNSPECIFIED",
+                    "connectNulls": false,
+                    "useDataTimeRange": false,
+                    "xAxisTimeFormat": "X_AXIS_TIME_FORMAT_AUTO"
+                  }
+                }
+              },
+              {
+                "id": {
+                  "value": "b14bc72e-a292-47b2-9061-e2882a2d8e01"
+                },
+                "title": "Failure Stage Over Time",
+                "description": "Pre-Helm means Helm never started; Helm means Helm executed and failed.",
+                "definition": {
+                  "lineChart": {
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": true,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "tooltip": {
+                      "showLabels": false,
+                      "type": "TOOLTIP_TYPE_ALL"
+                    },
+                    "queryDefinitions": [
+                      {
+                        "id": "b14bc72e-a292-47b2-9061-e2882a2d8e02",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.result == 'Failed' | create failure_stage from case { $d.helm_result == 'NotStarted' -> 'Pre-Helm', $d.helm_result == 'Failed' -> 'Helm', _ -> 'Post-Helm' } | groupby $d.failure_stage as failure_stage, $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate count() as failed_attempts"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_UNSPECIFIED",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "Failure stage",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 0,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      }
+                    ],
+                    "stackedLine": "STACKED_LINE_UNSPECIFIED",
+                    "connectNulls": false,
+                    "useDataTimeRange": false,
+                    "xAxisTimeFormat": "X_AXIS_TIME_FORMAT_AUTO"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": {
+              "value": "250e7a7e-af5c-4723-9f8a-28fcbcb39fef"
+            },
+            "appearance": {
+              "height": 25
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "5b339eb2-ca56-46c5-bbf6-a188b277116f"
+                },
+                "title": "Successful Attempt Duration Over Time",
+                "definition": {
+                  "lineChart": {
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": true,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "tooltip": {
+                      "showLabels": false,
+                      "type": "TOOLTIP_TYPE_ALL"
+                    },
+                    "queryDefinitions": [
+                      {
+                        "id": "56f4982b-411c-4cd8-be49-17184826edf4",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.result == 'Succeeded' | groupby $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate avg($d.total_duration_seconds:number) as average_seconds"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_SECONDS",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "Average",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 2,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      },
+                      {
+                        "id": "d7ba05e9-746d-4cab-9067-d4ef8f92137e",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.result == 'Succeeded' | groupby $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate percentile(0.95, $d.total_duration_seconds:number) as p95_seconds"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_SECONDS",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "P95",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 2,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      },
+                      {
+                        "id": "76f3a90c-4501-44ce-a67b-0e66c45933dc",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.result == 'Succeeded' | groupby $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate max($d.total_duration_seconds:number) as maximum_seconds"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_SECONDS",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "Maximum",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 2,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      }
+                    ],
+                    "stackedLine": "STACKED_LINE_UNSPECIFIED",
+                    "connectNulls": false,
+                    "useDataTimeRange": false,
+                    "xAxisTimeFormat": "X_AXIS_TIME_FORMAT_AUTO"
+                  }
+                },
+                "description": "End-to-end latency for successful deployment attempts only."
+              },
+              {
+                "id": {
+                  "value": "fcfef9e5-6cc5-4127-8c78-866eebff5fc5"
+                },
+                "title": "Helm Execution Duration Over Time",
+                "definition": {
+                  "lineChart": {
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": true,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "tooltip": {
+                      "showLabels": false,
+                      "type": "TOOLTIP_TYPE_ALL"
+                    },
+                    "queryDefinitions": [
+                      {
+                        "id": "aa0d7947-fde9-4aed-a3f2-21f60f373674",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.helm_result != 'NotStarted' | groupby $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate avg($d.helm_duration_seconds:number) as average_helm_seconds"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_SECONDS",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "Average Helm",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 2,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      },
+                      {
+                        "id": "d5642d7e-44fa-40e3-af9b-4a383cba4929",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.helm_result != 'NotStarted' | groupby $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate percentile(0.95, $d.helm_duration_seconds:number) as p95_helm_seconds"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_SECONDS",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "P95 Helm",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 2,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      },
+                      {
+                        "id": "1ef28b09-4708-407f-93f7-43a50341cd07",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.helm_result != 'NotStarted' | groupby $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate max($d.helm_duration_seconds:number) as maximum_helm_seconds"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_SECONDS",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "Maximum Helm",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 2,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      }
+                    ],
+                    "stackedLine": "STACKED_LINE_UNSPECIFIED",
+                    "connectNulls": false,
+                    "useDataTimeRange": false,
+                    "xAxisTimeFormat": "X_AXIS_TIME_FORMAT_AUTO"
+                  }
+                },
+                "description": "Helm latency for attempts where Helm started; excludes NotStarted zeroes."
+              }
+            ]
+          }
+        ],
+        "options": {
+          "custom": {
+            "name": "Reliability and Timing",
+            "collapsed": false,
+            "color": {
+              "predefined": "SECTION_PREDEFINED_COLOR_UNSPECIFIED"
+            },
+            "description": "Attempt outcomes, failure stages and phase-aware latency."
+          }
+        }
+      },
+      {
+        "id": {
+          "value": "a81c8a84-3f72-4a80-b5d0-0d8deb0e6e15"
+        },
+        "rows": [
+          {
+            "id": {
+              "value": "0a31cc5d-578c-4497-aedc-2bc19dc6402c"
+            },
+            "appearance": {
+              "height": 25
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "2e7ede15-a8d5-47c9-b68b-36a46e66402b"
+                },
+                "title": "Agave versus Tequila Successful Duration",
+                "description": "Average successful attempt duration by deployment configuration mode.",
+                "definition": {
+                  "lineChart": {
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": true,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "tooltip": {
+                      "showLabels": false,
+                      "type": "TOOLTIP_TYPE_ALL"
+                    },
+                    "queryDefinitions": [
+                      {
+                        "id": "0caaf7cb-b892-40a4-a470-2251ed0458fe",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.result == 'Succeeded' | create configuration_mode from if($d.agave_enabled == 'True', 'Agave', 'Tequila') | groupby $d.configuration_mode as configuration_mode, $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate avg($d.total_duration_seconds:number) as average_seconds"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_SECONDS",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "Configuration mode",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 2,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      }
+                    ],
+                    "stackedLine": "STACKED_LINE_UNSPECIFIED",
+                    "connectNulls": false,
+                    "useDataTimeRange": false,
+                    "xAxisTimeFormat": "X_AXIS_TIME_FORMAT_AUTO"
+                  }
+                }
+              },
+              {
+                "id": {
+                  "value": "97a8f023-3393-44ae-880b-ce6aaefd3f4d"
+                },
+                "title": "Pipeline Overhead Over Time",
+                "description": "Average successful-attempt time outside Helm, including validation, rendering and orchestration.",
+                "definition": {
+                  "lineChart": {
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": true,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "tooltip": {
+                      "showLabels": false,
+                      "type": "TOOLTIP_TYPE_ALL"
+                    },
+                    "queryDefinitions": [
+                      {
+                        "id": "15cbd0b6-a42a-4d25-a3d2-a2320c5eb2d7",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.result == 'Succeeded' | groupby $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate avg($d.total_duration_seconds:number - $d.helm_duration_seconds:number) as average_overhead_seconds"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_SECONDS",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "Average overhead",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 2,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      }
+                    ],
+                    "stackedLine": "STACKED_LINE_UNSPECIFIED",
+                    "connectNulls": false,
+                    "useDataTimeRange": false,
+                    "xAxisTimeFormat": "X_AXIS_TIME_FORMAT_AUTO"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": {
+              "value": "aeafd471-f979-4768-b81e-049ec8490fc6"
+            },
+            "appearance": {
+              "height": 22
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "36e9f382-e03e-4246-8907-adf316d78884"
+                },
+                "title": "Attempt Volume by Environment",
+                "definition": {
+                  "lineChart": {
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": true,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "tooltip": {
+                      "showLabels": false,
+                      "type": "TOOLTIP_TYPE_ALL"
+                    },
+                    "queryDefinitions": [
+                      {
+                        "id": "9b2060b7-1574-4238-b897-737b5734ed59",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | groupby $d.environment as environment, $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate count() as attempts"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_UNSPECIFIED",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "Environment",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 0,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      }
+                    ],
+                    "stackedLine": "STACKED_LINE_UNSPECIFIED",
+                    "connectNulls": false,
+                    "useDataTimeRange": false,
+                    "xAxisTimeFormat": "X_AXIS_TIME_FORMAT_AUTO"
+                  }
+                }
+              },
+              {
+                "id": {
+                  "value": "a03bce13-d546-456d-b7e3-c8f6970c1e01"
+                },
+                "title": "Attempt Volume by Workload Type",
+                "definition": {
+                  "lineChart": {
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": true,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "tooltip": {
+                      "showLabels": false,
+                      "type": "TOOLTIP_TYPE_ALL"
+                    },
+                    "queryDefinitions": [
+                      {
+                        "id": "a03bce13-d546-456d-b7e3-c8f6970c1e02",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | create workload_kind from if($d.object.regarding.kind != null, $d.object.regarding.kind, $d.regarding.kind) | groupby $d.workload_kind as workload_kind, $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate count() as attempts"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_UNSPECIFIED",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "Workload kind",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 0,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      }
+                    ],
+                    "stackedLine": "STACKED_LINE_UNSPECIFIED",
+                    "connectNulls": false,
+                    "useDataTimeRange": false,
+                    "xAxisTimeFormat": "X_AXIS_TIME_FORMAT_AUTO"
+                  }
+                },
+                "description": "Deployment versus CronJob attempts from the wrapped Kubernetes Event context."
+              }
+            ]
+          }
+        ],
+        "options": {
+          "custom": {
+            "name": "Platform Behaviour",
+            "collapsed": false,
+            "color": {
+              "predefined": "SECTION_PREDEFINED_COLOR_UNSPECIFIED"
+            },
+            "description": "Deployment orchestration, environment and workload behaviour."
+          }
+        }
+      },
+      {
+        "id": {
+          "value": "2a494429-c04b-4b18-bfc5-e0a85c9d1282"
+        },
+        "rows": [
+          {
+            "id": {
+              "value": "a5e82bf0-94e1-4b6d-984c-262e5ae0ebff"
+            },
+            "appearance": {
+              "height": 26
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "7412e043-06f2-48a5-ac83-0d28bdf12c8a"
+                },
+                "title": "Successful Duration by Application",
+                "description": "Average successful attempt duration; up to 20 application series.",
+                "definition": {
+                  "lineChart": {
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": true,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "tooltip": {
+                      "showLabels": false,
+                      "type": "TOOLTIP_TYPE_ALL"
+                    },
+                    "queryDefinitions": [
+                      {
+                        "id": "072bc7b4-f311-4bb0-80ea-e460061ca3a2",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.result == 'Succeeded' | groupby $d.application as application, $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate avg($d.total_duration_seconds:number) as average_seconds"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_SECONDS",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "Application",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 2,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      }
+                    ],
+                    "stackedLine": "STACKED_LINE_UNSPECIFIED",
+                    "connectNulls": false,
+                    "useDataTimeRange": false,
+                    "xAxisTimeFormat": "X_AXIS_TIME_FORMAT_AUTO"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": {
+              "value": "6aabd5db-9852-4ac8-88a9-10de0da4ff3b"
+            },
+            "appearance": {
+              "height": 22
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "9edae0e3-664c-49ac-8bdc-8a59df39e308"
+                },
+                "title": "Attempt Volume by Application",
+                "definition": {
+                  "lineChart": {
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": true,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "tooltip": {
+                      "showLabels": false,
+                      "type": "TOOLTIP_TYPE_ALL"
+                    },
+                    "queryDefinitions": [
+                      {
+                        "id": "e5d939ba-c527-4269-89c0-c5bce3729309",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | groupby $d.application as application, $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate count() as attempts"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_UNSPECIFIED",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "Application",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 0,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      }
+                    ],
+                    "stackedLine": "STACKED_LINE_UNSPECIFIED",
+                    "connectNulls": false,
+                    "useDataTimeRange": false,
+                    "xAxisTimeFormat": "X_AXIS_TIME_FORMAT_AUTO"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "options": {
+          "custom": {
+            "name": "Application Analysis",
+            "collapsed": false,
+            "color": {
+              "predefined": "SECTION_PREDEFINED_COLOR_UNSPECIFIED"
+            },
+            "description": "Successful latency and attempt volume by application."
+          }
+        }
+      },
+      {
+        "id": {
+          "value": "afe1a04a-e048-4a3c-a55f-bbe3e5ee5a32"
+        },
+        "rows": [
+          {
+            "id": {
+              "value": "16efd8e0-047f-47d0-b199-249c100f535a"
+            },
+            "appearance": {
+              "height": 38
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "2c3ae321-45b9-4ca8-86c6-96878be330ea"
+                },
+                "title": "Recent Deployment Attempt History",
+                "description": "Core Clearent deployment fields and Kubernetes Event/cluster context. Detailed Agave contract fields are shown in the Agave dashboard.",
+                "definition": {
+                  "dataTable": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | create event_time from if($d.object.eventTime_custom_timestamp != null, $d.object.eventTime_custom_timestamp, $d.eventTime_custom_timestamp) | create event_reason from if($d.object.reason != null, $d.object.reason, $d.reason) | create event_type from if($d.object.type != null, $d.object.type, $d.type) | create workload_kind from if($d.object.regarding.kind != null, $d.object.regarding.kind, $d.regarding.kind) | create workload_name from if($d.object.regarding.name != null, $d.object.regarding.name, $d.regarding.name) | create workload_namespace from if($d.object.regarding.namespace != null, $d.object.regarding.namespace, $d.regarding.namespace)"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "resultsPerPage": 100,
+                    "rowStyle": "ROW_STYLE_ONE_LINE",
+                    "columns": [
+                      {
+                        "field": "$m.timestamp",
+                        "width": 210
+                      },
+                      {
+                        "field": "$m.ingressTimestamp",
+                        "width": 210
+                      },
+                      {
+                        "field": "$d.deployment_started_at",
+                        "width": 245
+                      },
+                      {
+                        "field": "$d.deployment_completed_at",
+                        "width": 245
+                      },
+                      {
+                        "field": "$d.application",
+                        "width": 260
+                      },
+                      {
+                        "field": "$d.environment",
+                        "width": 160
+                      },
+                      {
+                        "field": "$d.namespace",
+                        "width": 150
+                      },
+                      {
+                        "field": "$d.result",
+                        "width": 120
+                      },
+                      {
+                        "field": "$d.helm_result",
+                        "width": 130
+                      },
+                      {
+                        "field": "$d.agave_enabled",
+                        "width": 120
+                      },
+                      {
+                        "field": "$d.job_attempt",
+                        "width": 110
+                      },
+                      {
+                        "field": "$d.job_id",
+                        "width": 310
+                      },
+                      {
+                        "field": "$d.build_id",
+                        "width": 120
+                      },
+                      {
+                        "field": "$d.total_duration_seconds",
+                        "width": 170
+                      },
+                      {
+                        "field": "$d.total_duration_ms",
+                        "width": 150
+                      },
+                      {
+                        "field": "$d.helm_started_at",
+                        "width": 245
+                      },
+                      {
+                        "field": "$d.helm_completed_at",
+                        "width": 245
+                      },
+                      {
+                        "field": "$d.helm_duration_seconds",
+                        "width": 170
+                      },
+                      {
+                        "field": "$d.helm_duration_ms",
+                        "width": 150
+                      },
+                      {
+                        "field": "$d.image_tag",
+                        "width": 180
+                      },
+                      {
+                        "field": "$d.pipeline",
+                        "width": 240
+                      },
+                      {
+                        "field": "$d.commit",
+                        "width": 320
+                      },
+                      {
+                        "field": "$d.workload_kind",
+                        "width": 130
+                      },
+                      {
+                        "field": "$d.workload_name",
+                        "width": 260
+                      },
+                      {
+                        "field": "$d.workload_namespace",
+                        "width": 150
+                      },
+                      {
+                        "field": "$d.attributes.event_name",
+                        "width": 340
+                      },
+                      {
+                        "field": "$d.event_time",
+                        "width": 245
+                      },
+                      {
+                        "field": "$d.event_reason",
+                        "width": 180
+                      },
+                      {
+                        "field": "$d.event_type",
+                        "width": 100
+                      },
+                      {
+                        "field": "$d.resource.attributes.k8s_cluster_name",
+                        "width": 200
+                      }
+                    ],
+                    "orderBy": {
+                      "field": "$m.timestamp",
+                      "orderDirection": "ORDER_DIRECTION_DESC"
+                    },
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": {
+              "value": "6a24fac4-85c8-41b9-90d3-2c4e2cbe052d"
+            },
+            "appearance": {
+              "height": 30
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "6526b575-a553-4ffa-a377-de12aa223803"
+                },
+                "title": "Failed Deployment Attempts",
+                "definition": {
+                  "dataTable": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.result == 'Failed' | create event_time from if($d.object.eventTime_custom_timestamp != null, $d.object.eventTime_custom_timestamp, $d.eventTime_custom_timestamp) | create event_reason from if($d.object.reason != null, $d.object.reason, $d.reason) | create event_type from if($d.object.type != null, $d.object.type, $d.type) | create workload_kind from if($d.object.regarding.kind != null, $d.object.regarding.kind, $d.regarding.kind) | create workload_name from if($d.object.regarding.name != null, $d.object.regarding.name, $d.regarding.name) | create workload_namespace from if($d.object.regarding.namespace != null, $d.object.regarding.namespace, $d.regarding.namespace)"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "resultsPerPage": 100,
+                    "rowStyle": "ROW_STYLE_ONE_LINE",
+                    "columns": [
+                      {
+                        "field": "$m.timestamp",
+                        "width": 210
+                      },
+                      {
+                        "field": "$d.application",
+                        "width": 260
+                      },
+                      {
+                        "field": "$d.environment",
+                        "width": 160
+                      },
+                      {
+                        "field": "$d.namespace",
+                        "width": 150
+                      },
+                      {
+                        "field": "$d.job_attempt",
+                        "width": 110
+                      },
+                      {
+                        "field": "$d.job_id",
+                        "width": 310
+                      },
+                      {
+                        "field": "$d.build_id",
+                        "width": 120
+                      },
+                      {
+                        "field": "$d.helm_result",
+                        "width": 130
+                      },
+                      {
+                        "field": "$d.deployment_started_at",
+                        "width": 245
+                      },
+                      {
+                        "field": "$d.deployment_completed_at",
+                        "width": 245
+                      },
+                      {
+                        "field": "$d.helm_started_at",
+                        "width": 245
+                      },
+                      {
+                        "field": "$d.helm_completed_at",
+                        "width": 245
+                      },
+                      {
+                        "field": "$d.total_duration_seconds",
+                        "width": 170
+                      },
+                      {
+                        "field": "$d.helm_duration_seconds",
+                        "width": 170
+                      },
+                      {
+                        "field": "$d.image_tag",
+                        "width": 180
+                      },
+                      {
+                        "field": "$d.pipeline",
+                        "width": 240
+                      },
+                      {
+                        "field": "$d.commit",
+                        "width": 320
+                      },
+                      {
+                        "field": "$d.event_reason",
+                        "width": 180
+                      },
+                      {
+                        "field": "$d.workload_kind",
+                        "width": 130
+                      },
+                      {
+                        "field": "$d.workload_name",
+                        "width": 260
+                      },
+                      {
+                        "field": "$d.workload_namespace",
+                        "width": 150
+                      },
+                      {
+                        "field": "$d.resource.attributes.k8s_cluster_name",
+                        "width": 200
+                      }
+                    ],
+                    "orderBy": {
+                      "field": "$m.timestamp",
+                      "orderDirection": "ORDER_DIRECTION_DESC"
+                    },
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE"
+                  }
+                },
+                "description": "Failed attempts with retry identity, lifecycle timestamps and workload context."
+              }
+            ]
+          },
+          {
+            "id": {
+              "value": "b4f1b11d-bfe7-4acc-b288-902e727f3a40"
+            },
+            "appearance": {
+              "height": 32
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "09dad27d-9a6e-4440-a0d4-251707797b72"
+                },
+                "title": "Slowest Successful Attempts",
+                "definition": {
+                  "dataTable": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.result == 'Succeeded' | create event_time from if($d.object.eventTime_custom_timestamp != null, $d.object.eventTime_custom_timestamp, $d.eventTime_custom_timestamp) | create event_reason from if($d.object.reason != null, $d.object.reason, $d.reason) | create event_type from if($d.object.type != null, $d.object.type, $d.type) | create workload_kind from if($d.object.regarding.kind != null, $d.object.regarding.kind, $d.regarding.kind) | create workload_name from if($d.object.regarding.name != null, $d.object.regarding.name, $d.regarding.name) | create workload_namespace from if($d.object.regarding.namespace != null, $d.object.regarding.namespace, $d.regarding.namespace) | create total_duration_seconds_num from $d.total_duration_seconds:number | orderby $d.total_duration_seconds_num desc | limit 100"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "resultsPerPage": 100,
+                    "rowStyle": "ROW_STYLE_ONE_LINE",
+                    "columns": [
+                      {
+                        "field": "$m.timestamp",
+                        "width": 210
+                      },
+                      {
+                        "field": "$d.application",
+                        "width": 260
+                      },
+                      {
+                        "field": "$d.environment",
+                        "width": 160
+                      },
+                      {
+                        "field": "$d.namespace",
+                        "width": 150
+                      },
+                      {
+                        "field": "$d.total_duration_seconds_num",
+                        "width": 180
+                      },
+                      {
+                        "field": "$d.helm_duration_seconds",
+                        "width": 170
+                      },
+                      {
+                        "field": "$d.agave_enabled",
+                        "width": 120
+                      },
+                      {
+                        "field": "$d.job_attempt",
+                        "width": 110
+                      },
+                      {
+                        "field": "$d.job_id",
+                        "width": 310
+                      },
+                      {
+                        "field": "$d.build_id",
+                        "width": 120
+                      },
+                      {
+                        "field": "$d.image_tag",
+                        "width": 180
+                      },
+                      {
+                        "field": "$d.pipeline",
+                        "width": 240
+                      },
+                      {
+                        "field": "$d.commit",
+                        "width": 320
+                      },
+                      {
+                        "field": "$d.workload_kind",
+                        "width": 130
+                      },
+                      {
+                        "field": "$d.workload_name",
+                        "width": 260
+                      },
+                      {
+                        "field": "$d.resource.attributes.k8s_cluster_name",
+                        "width": 200
+                      }
+                    ],
+                    "orderBy": {
+                      "field": "$d.total_duration_seconds_num",
+                      "orderDirection": "ORDER_DIRECTION_DESC"
+                    },
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE"
+                  }
+                },
+                "description": "Top 100 successful attempts by numeric measured deployment duration."
+              }
+            ]
+          },
+          {
+            "id": {
+              "value": "ca5e029f-b70c-42b5-a5e1-21beb2859e02"
+            },
+            "appearance": {
+              "height": 30
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "ca5e029f-b70c-42b5-a5e1-21beb2859e01"
+                },
+                "title": "Retried Deployment Attempts",
+                "definition": {
+                  "dataTable": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.job_attempt:number > 1 | create event_time from if($d.object.eventTime_custom_timestamp != null, $d.object.eventTime_custom_timestamp, $d.eventTime_custom_timestamp) | create event_reason from if($d.object.reason != null, $d.object.reason, $d.reason) | create event_type from if($d.object.type != null, $d.object.type, $d.type) | create workload_kind from if($d.object.regarding.kind != null, $d.object.regarding.kind, $d.regarding.kind) | create workload_name from if($d.object.regarding.name != null, $d.object.regarding.name, $d.regarding.name) | create workload_namespace from if($d.object.regarding.namespace != null, $d.object.regarding.namespace, $d.regarding.namespace)"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "resultsPerPage": 100,
+                    "rowStyle": "ROW_STYLE_ONE_LINE",
+                    "columns": [
+                      {
+                        "field": "$m.timestamp",
+                        "width": 210
+                      },
+                      {
+                        "field": "$d.application",
+                        "width": 260
+                      },
+                      {
+                        "field": "$d.environment",
+                        "width": 160
+                      },
+                      {
+                        "field": "$d.namespace",
+                        "width": 150
+                      },
+                      {
+                        "field": "$d.job_attempt",
+                        "width": 110
+                      },
+                      {
+                        "field": "$d.job_id",
+                        "width": 310
+                      },
+                      {
+                        "field": "$d.result",
+                        "width": 120
+                      },
+                      {
+                        "field": "$d.helm_result",
+                        "width": 130
+                      },
+                      {
+                        "field": "$d.total_duration_seconds",
+                        "width": 170
+                      },
+                      {
+                        "field": "$d.helm_duration_seconds",
+                        "width": 170
+                      },
+                      {
+                        "field": "$d.build_id",
+                        "width": 120
+                      },
+                      {
+                        "field": "$d.image_tag",
+                        "width": 180
+                      },
+                      {
+                        "field": "$d.pipeline",
+                        "width": 240
+                      },
+                      {
+                        "field": "$d.commit",
+                        "width": 320
+                      },
+                      {
+                        "field": "$d.event_reason",
+                        "width": 180
+                      },
+                      {
+                        "field": "$d.workload_kind",
+                        "width": 130
+                      },
+                      {
+                        "field": "$d.workload_name",
+                        "width": 260
+                      },
+                      {
+                        "field": "$d.resource.attributes.k8s_cluster_name",
+                        "width": 200
+                      }
+                    ],
+                    "orderBy": {
+                      "field": "$m.timestamp",
+                      "orderDirection": "ORDER_DIRECTION_DESC"
+                    },
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE"
+                  }
+                },
+                "description": "Attempts with JobAttempt greater than one, including the unique Azure job ID."
+              }
+            ]
+          }
+        ],
+        "options": {
+          "custom": {
+            "name": "Developer and SRE Investigation",
+            "collapsed": false,
+            "color": {
+              "predefined": "SECTION_PREDEFINED_COLOR_UNSPECIFIED"
+            },
+            "description": "Attempt identity, phase timings and Kubernetes Event context."
+          }
+        }
+      }
+    ]
+  },
+  "variables": [],
+  "variablesV2": [],
+  "filters": [],
+  "relativeTimeFrame": "604800s",
+  "annotations": [],
+  "off": {},
+  "actions": []
+}

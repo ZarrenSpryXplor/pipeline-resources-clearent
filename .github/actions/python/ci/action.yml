@@ -1,0 +1,123 @@
+name: Clearent Python continuous integration
+description: Runs deterministic dependency restore, lint, pytest coverage and compilation for Python applications.
+
+inputs:
+  application-directory:
+    description: Checked-out application repository directory.
+    required: true
+  python-version:
+    description: Python version accepted by actions/setup-python.
+    required: false
+    default: "3.12"
+  requirements-file:
+    description: Runtime requirements file relative to the application directory.
+    required: false
+    default: requirements.txt
+  test-requirements-file:
+    description: Optional test requirements file relative to the application directory.
+    required: false
+    default: ""
+  lint-module:
+    description: Python lint module used when lint enforcement is enabled.
+    required: false
+    default: ruff
+  test-path:
+    description: pytest discovery path relative to the application directory.
+    required: false
+    default: .
+  coverage-source:
+    description: Python package or path measured by pytest-cov.
+    required: false
+    default: .
+  enforce-lint:
+    description: Run the configured lint module using 'check .'.
+    required: false
+    default: "false"
+  skip-tests:
+    description: Skip tests only for an explicitly approved migration exception.
+    required: false
+    default: "false"
+  require-coverage:
+    description: Fail when the configured Cobertura report is absent.
+    required: false
+    default: "true"
+  coverage-file:
+    description: Cobertura report path relative to the application directory.
+    required: false
+    default: .clearent-test-results/python/coverage.xml
+  test-results-path:
+    description: Test result directory relative to the application directory.
+    required: false
+    default: .clearent-test-results/python
+  package-index-url:
+    description: Optional private Python simple-index URL.
+    required: false
+    default: ""
+  package-index-username:
+    description: Username paired with the package-read token.
+    required: false
+    default: xplortechnologies
+
+outputs:
+  coverage-file:
+    description: Absolute Cobertura report path when present.
+    value: ${{ steps.ci.outputs.coverage-file }}
+  test-results-path:
+    description: Absolute pytest result path when present.
+    value: ${{ steps.ci.outputs.test-results-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate Python CI inputs
+      shell: bash
+      env:
+        CLEARENT_APPLICATION_DIRECTORY: ${{ inputs.application-directory }}
+        CLEARENT_PYTHON_REQUIREMENTS_FILE: ${{ inputs.requirements-file }}
+        CLEARENT_PYTHON_TEST_REQUIREMENTS_FILE: ${{ inputs.test-requirements-file }}
+        CLEARENT_PYTHON_LINT_MODULE: ${{ inputs.lint-module }}
+        CLEARENT_PYTHON_TEST_PATH: ${{ inputs.test-path }}
+        CLEARENT_PYTHON_COVERAGE_SOURCE: ${{ inputs.coverage-source }}
+        CLEARENT_ENFORCE_LINT: ${{ inputs.enforce-lint }}
+        CLEARENT_SKIP_TESTS: ${{ inputs.skip-tests }}
+        CLEARENT_REQUIRE_COVERAGE: ${{ inputs.require-coverage }}
+        CLEARENT_COVERAGE_FILE: ${{ inputs.coverage-file }}
+        CLEARENT_TEST_RESULTS_PATH: ${{ inputs.test-results-path }}
+      run: bash "$GITHUB_ACTION_PATH/run.sh" validate
+
+    - name: Set up Python
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+        cache-dependency-path: ${{ inputs.application-directory }}/${{ inputs.requirements-file }}
+
+    - name: Configure Python package repository
+      shell: pwsh
+      env:
+        CLEARENT_PYTHON_PACKAGE_INDEX_URL: ${{ inputs.package-index-url }}
+        CLEARENT_PYTHON_PACKAGE_INDEX_USERNAME: ${{ inputs.package-index-username }}
+        CLEARENT_PACKAGE_READ_TOKEN: ${{ env.CLEARENT_PACKAGE_READ_TOKEN }}
+      run: '& "$env:GITHUB_ACTION_PATH/Configure-Pip.ps1"'
+
+    - name: Run Python CI
+      id: ci
+      shell: bash
+      env:
+        CLEARENT_APPLICATION_DIRECTORY: ${{ inputs.application-directory }}
+        CLEARENT_PYTHON_REQUIREMENTS_FILE: ${{ inputs.requirements-file }}
+        CLEARENT_PYTHON_TEST_REQUIREMENTS_FILE: ${{ inputs.test-requirements-file }}
+        CLEARENT_PYTHON_LINT_MODULE: ${{ inputs.lint-module }}
+        CLEARENT_PYTHON_TEST_PATH: ${{ inputs.test-path }}
+        CLEARENT_PYTHON_COVERAGE_SOURCE: ${{ inputs.coverage-source }}
+        CLEARENT_ENFORCE_LINT: ${{ inputs.enforce-lint }}
+        CLEARENT_SKIP_TESTS: ${{ inputs.skip-tests }}
+        CLEARENT_REQUIRE_COVERAGE: ${{ inputs.require-coverage }}
+        CLEARENT_COVERAGE_FILE: ${{ inputs.coverage-file }}
+        CLEARENT_TEST_RESULTS_PATH: ${{ inputs.test-results-path }}
+      run: bash "$GITHUB_ACTION_PATH/run.sh" ci
+
+    - name: Remove temporary pip credentials
+      if: ${{ always() }}
+      shell: pwsh
+      run: '& "$env:GITHUB_ACTION_PATH/Configure-Pip.ps1" -Cleanup'

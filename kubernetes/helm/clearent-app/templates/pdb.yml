@@ -1,0 +1,22 @@
+{{- if and
+      (eq (include "common.isDeployment" .) "true")
+      (gt (int .Values.replicas) 1)
+}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+
+metadata:
+  name: {{ include "app.pdbName" . | quote }}
+  namespace: {{ include "app.namespace" . | quote }}
+  labels:
+    {{- include "common.labels" . | nindent 4 }}
+  annotations:
+    {{- include "common.annotations" . | nindent 4 }}
+
+spec:
+  minAvailable: 1
+
+  selector:
+    matchLabels:
+      {{- include "common.selectorLabels" . | nindent 6 }}
+{{- end }}

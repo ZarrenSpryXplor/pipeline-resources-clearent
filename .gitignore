@@ -2,3 +2,4 @@
 .DS_Store
 .vs/*
 pipeline-resources.iml
+test-results/

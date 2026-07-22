@@ -1,0 +1,786 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Clearent Application Helm Values",
+  "description": "Values schema for the shared application Helm chart and Agave configuration platform.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "global",
+    "replicas",
+    "applicationType",
+    "applicationFramework",
+    "applicationSize",
+    "image",
+    "agave",
+    "platformConfig",
+    "secretsContract",
+    "agaveSharedSources"
+  ],
+  "properties": {
+    "nameOverride": {
+      "type": "string",
+      "default": "",
+      "maxLength": 63,
+      "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+      "description": "Compatibility field; clearent-app resource names remain release-based."
+    },
+    "fullnameOverride": {
+      "type": "string",
+      "default": "",
+      "maxLength": 63,
+      "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+      "description": "Compatibility field; clearent-app resource names remain release-based."
+    },
+    "project_name": {
+      "type": "string",
+      "default": "",
+      "maxLength": 63,
+      "pattern": "^$|^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$",
+      "description": "Optional project identifier used by platform labels."
+    },
+    "global": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "environment"
+      ],
+      "properties": {
+        "environment": {
+          "type": "string",
+          "default": "",
+          "maxLength": 63,
+          "pattern": "^$|^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$",
+          "description": "Exact canonical environment identity used unchanged for configuration lookup and environment-scoped platform binding. Prefixes are never added, removed or aliased; for example, dev and clearent-dev are distinct identities.",
+          "examples": [
+            "clearent-dev",
+            "dev"
+          ]
+        }
+      }
+    },
+    "replicas": {
+      "type": "integer",
+      "default": 1,
+      "minimum": 0,
+      "maximum": 100,
+      "title": "Desired number of application pods"
+    },
+    "applicationType": {
+      "type": "string",
+      "enum": [
+        "web_service",
+        "web_app",
+        "service",
+        "background_service",
+        "cron_job",
+        "cronjob"
+      ],
+      "title": "Application workload type"
+    },
+    "applicationFramework": {
+      "type": "string",
+      "enum": [
+        "dotnet",
+        "java",
+        "angular",
+        "vue",
+        "py"
+      ],
+      "title": "Application framework"
+    },
+    "applicationSize": {
+      "type": "string",
+      "default": "small",
+      "enum": [
+        "small",
+        "medium",
+        "large",
+        "x-large"
+      ],
+      "title": "Application resource profile"
+    },
+    "serviceClassification": {
+      "type": "string",
+      "default": "undefined",
+      "enum": [
+        "undefined",
+        "class_a_plus",
+        "class_a",
+        "class_b",
+        "class_c"
+      ],
+      "title": "Application service classification"
+    },
+    "configEnvironment": {
+      "type": "string",
+      "default": "",
+      "maxLength": 63,
+      "pattern": "^$|^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$",
+      "title": "Legacy configuration environment",
+      "description": "Exact legacy configuration identity retained for callers that have not yet migrated to global.environment. When both are supplied they must identify the same environment; no aliasing or prefix transformation is permitted.",
+      "examples": [
+        "clearent-dev",
+        "dev"
+      ]
+    },
+    "cronJobSchedule": {
+      "type": "string",
+      "default": "",
+      "maxLength": 100,
+      "title": "CronJob schedule",
+      "examples": [
+        "*/5 * * * *"
+      ]
+    },
+    "cronJobSuspended": {
+      "type": "boolean",
+      "default": false,
+      "title": "Deploy the CronJob in a suspended state"
+    },
+    "startingDeadlineSeconds": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "default": null,
+      "title": "Maximum permitted CronJob start delay"
+    },
+    "javaOptions": {
+      "type": "string",
+      "default": "",
+      "maxLength": 4096,
+      "title": "Java runtime options",
+      "examples": [
+        "-Xmx512m"
+      ]
+    },
+    "java": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "springConfigFile"
+      ],
+      "properties": {
+        "springConfigFile": {
+          "type": "string",
+          "default": "application.properties",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$",
+          "title": "Spring configuration template filename",
+          "description": "Filename of the primary Spring configuration template under config/templates/. Path separators are not permitted."
+        }
+      }
+    },
+    "healthCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "port",
+        "path"
+      ],
+      "properties": {
+        "port": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            {
+              "type": "string",
+              "pattern": "^(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
+            }
+          ],
+          "default": 80,
+          "title": "Health-check port"
+        },
+        "path": {
+          "type": "string",
+          "default": "/health",
+          "maxLength": 2048,
+          "pattern": "^$|^/.*$",
+          "title": "HTTP health-check path"
+        }
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "registry",
+        "repository",
+        "tag"
+      ],
+      "properties": {
+        "registry": {
+          "type": "string",
+          "default": "xplorcrsharedregistry.azurecr.io",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[A-Za-z0-9.-]+(?::[0-9]+)?$",
+          "title": "Container registry"
+        },
+        "repository": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)*$",
+          "title": "Container repository",
+          "examples": [
+            "nexus/ach-transaction"
+          ]
+        },
+        "tag": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$",
+          "title": "Container image tag"
+        }
+      }
+    },
+    "tequilaImageTag": {
+      "type": "string",
+      "default": "stable",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$",
+      "title": "Legacy Tequila image tag"
+    },
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subdomain",
+        "domain",
+        "path",
+        "path2",
+        "behindEdgeService",
+        "tls",
+        "configSnippet",
+        "sslCertSecret",
+        "backendTls"
+      ],
+      "properties": {
+        "subdomain": {
+          "type": "string",
+          "default": "clearent.dev",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?(?:\\.[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)*$"
+        },
+        "domain": {
+          "type": "string",
+          "default": "clearent.net",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?(?:\\.[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)*$"
+        },
+        "path": {
+          "type": "string",
+          "default": "",
+          "maxLength": 2048,
+          "pattern": "^$|^/.*$"
+        },
+        "path2": {
+          "type": "string",
+          "default": "",
+          "maxLength": 2048,
+          "pattern": "^$|^/.*$"
+        },
+        "behindEdgeService": {
+          "type": "boolean",
+          "default": true
+        },
+        "tls": {
+          "type": "boolean",
+          "default": false
+        },
+        "configSnippet": {
+          "type": "string",
+          "default": "",
+          "maxLength": 16384
+        },
+        "sslCertSecret": {
+          "type": "string",
+          "default": "",
+          "maxLength": 253,
+          "pattern": "^$|^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+        },
+        "backendTls": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "pipeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "name",
+        "runUri",
+        "deploymentId",
+        "repository",
+        "repositoryOwner",
+        "environment"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "const": "github_actions",
+          "default": "github_actions",
+          "description": "Platform-owned CI/CD provider identity."
+        },
+        "name": {
+          "type": "string",
+          "default": "",
+          "maxLength": 253,
+          "description": "Platform-owned GitHub Actions workflow name."
+        },
+        "runUri": {
+          "type": "string",
+          "default": "",
+          "maxLength": 4096,
+          "pattern": "^$|^https://github\\.com/[^/]+/[^/]+/actions/runs/[0-9]+(?:/attempts/[0-9]+)?$",
+          "description": "Platform-owned URL for the triggering GitHub Actions run."
+        },
+        "deploymentId": {
+          "type": "string",
+          "default": "",
+          "pattern": "^$|^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$",
+          "description": "Platform-generated deployment transaction UUID propagated to rendered resources and target Secrets."
+        },
+        "repository": {
+          "type": "string",
+          "default": "",
+          "maxLength": 512,
+          "pattern": "^$|^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$",
+          "description": "Platform-owned GITHUB_REPOSITORY in owner/name form, used for Agave application identity binding."
+        },
+        "repositoryOwner": {
+          "type": "string",
+          "default": "",
+          "maxLength": 100,
+          "pattern": "^$|^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$",
+          "description": "Platform-owned GITHUB_REPOSITORY_OWNER."
+        },
+        "environment": {
+          "type": "string",
+          "default": "",
+          "maxLength": 63,
+          "pattern": "^$|^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$",
+          "description": "Platform-owned exact protected GitHub Environment used for Agave binding. It must match the effective configuration identity byte-for-byte; prefixes are never added, removed or aliased.",
+          "examples": [
+            "clearent-dev",
+            "dev"
+          ]
+        }
+      }
+    },
+    "siteStatus": {
+      "type": "string",
+      "default": "inactive",
+      "maxLength": 100
+    },
+    "extraEnvVars": {
+      "type": "string",
+      "default": "{}",
+      "description": "YAML object encoded as a string and rendered as additional application environment variables."
+    },
+    "kerberos": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "secretStoreName",
+        "recordName"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "secretStoreName": {
+          "type": "string",
+          "default": "ksm-secret-store",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+        },
+        "recordName": {
+          "type": "string",
+          "default": "",
+          "maxLength": 253,
+          "pattern": "^$|^[A-Za-z0-9][A-Za-z0-9._-]*$"
+        }
+      }
+    },
+    "smb": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mounts"
+      ],
+      "properties": {
+        "mounts": {
+          "type": "string",
+          "default": "[]",
+          "description": "YAML array encoded as a string containing SMB PVC mount declarations."
+        }
+      }
+    },
+    "podSecurityContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runAsNonRoot",
+        "runAsUser",
+        "runAsGroup",
+        "seccompProfile"
+      ],
+      "properties": {
+        "runAsNonRoot": {
+          "type": "boolean",
+          "default": true
+        },
+        "runAsUser": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1000
+        },
+        "runAsGroup": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1000
+        },
+        "fsGroup": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "seccompProfile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "RuntimeDefault",
+                "Localhost",
+                "Unconfined"
+              ],
+              "default": "RuntimeDefault"
+            },
+            "localhostProfile": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "type": {
+                    "const": "Localhost"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              },
+              "then": {
+                "required": [
+                  "localhostProfile"
+                ]
+              },
+              "else": {
+                "not": {
+                  "required": [
+                    "localhostProfile"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "sysctls": {
+          "type": "array",
+          "default": [
+            {
+              "name": "net.ipv4.ip_unprivileged_port_start",
+              "value": "80"
+            }
+          ],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "value"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": [
+                  "net.ipv4.ip_unprivileged_port_start"
+                ]
+              },
+              "value": {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "agave": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "rolloutGate"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Platform-owned circuit breaker for the Agave runtime."
+        },
+        "rolloutGate": {
+          "type": "string",
+          "default": "closed",
+          "enum": [
+            "closed",
+            "open"
+          ],
+          "description": "Platform-owned two-phase deployment gate. Closed pauses or suspends the workload until fresh Agave reconciliation is proven."
+        }
+      }
+    },
+    "platformConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "syncMode",
+        "refreshInterval"
+      ],
+      "properties": {
+        "syncMode": {
+          "type": "string",
+          "default": "governed",
+          "enum": [
+            "governed",
+            "continuous"
+          ]
+        },
+        "refreshInterval": {
+          "type": "string",
+          "default": "6h",
+          "enum": [
+            "6h",
+            "12h"
+          ]
+        }
+      }
+    },
+    "secretsContract": {
+      "type": "object",
+      "default": {},
+      "title": "Agave application-variable contract",
+      "description": "Contract mapping for one private application source plus platform-published shared sourceRefs.",
+      "maxProperties": 10,
+      "propertyNames": {
+        "pattern": "^(default|[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "minProperties": 1,
+        "maxProperties": 50,
+        "propertyNames": {
+          "pattern": "^[A-Za-z0-9_][A-Za-z0-9._-]{0,252}$"
+        },
+        "additionalProperties": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._:@/-]*$",
+              "description": "Exact text-field name in the deterministic provider record."
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "isBinary"
+              ],
+              "properties": {
+                "isBinary": {
+                  "type": "boolean",
+                  "const": true,
+                  "description": "Must be true for binary file projections. The target filename is also the exact provider attachment name."
+                }
+              }
+            }
+          ]
+        }
+      },
+      "examples": [
+        {
+          "default": {
+            "RABBITMQ_USERNAME": "rmq-username",
+            "clearent_gateway.jks": {
+              "isBinary": true
+            }
+          }
+        }
+      ]
+    },
+    "agaveSharedSources": {
+      "type": "object",
+      "default": {},
+      "description": "Minimal platform-compiled shared-source selection and catalogue provenance. This is not a runtime signature.",
+      "additionalProperties": false,
+      "required": [
+        "catalogueApiVersion",
+        "catalogueDigest",
+        "provider",
+        "organisation",
+        "sharedSources"
+      ],
+      "properties": {
+        "catalogueApiVersion": {
+          "type": "string",
+          "enum": [
+            "",
+            "agave.platform.xplor/v1alpha1"
+          ]
+        },
+        "catalogueDigest": {
+          "type": "string",
+          "pattern": "^$|^[0-9a-f]{64}$"
+        },
+        "provider": {
+          "type": "string",
+          "enum": [
+            "",
+            "github_actions"
+          ],
+          "description": "CI/CD provider covered by the compiled shared-source proof."
+        },
+        "organisation": {
+          "type": "string",
+          "maxLength": 100,
+          "pattern": "^$|^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$",
+          "description": "GitHub organisation covered by the compiled shared-source proof."
+        },
+        "sharedSources": {
+          "type": "object",
+          "maxProperties": 10,
+          "propertyNames": {
+            "pattern": "^shared-[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "properties",
+              "attachments"
+            ],
+            "properties": {
+              "properties": {
+                "type": "array",
+                "uniqueItems": true,
+                "maxItems": 50,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 253,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._:@/-]{0,252}$"
+                }
+              },
+              "attachments": {
+                "type": "array",
+                "uniqueItems": true,
+                "maxItems": 50,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 253,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "applicationType": {
+            "enum": [
+              "cron_job",
+              "cronjob"
+            ]
+          }
+        },
+        "required": [
+          "applicationType"
+        ]
+      },
+      "then": {
+        "properties": {
+          "cronJobSchedule": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "cronJobSchedule"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "ingress": {
+            "properties": {
+              "path2": {
+                "minLength": 1
+              }
+            },
+            "required": [
+              "path2"
+            ]
+          }
+        },
+        "required": [
+          "ingress"
+        ]
+      },
+      "then": {
+        "properties": {
+          "ingress": {
+            "properties": {
+              "path": {
+                "minLength": 1
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

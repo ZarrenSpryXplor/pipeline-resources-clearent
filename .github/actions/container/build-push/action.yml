@@ -1,0 +1,102 @@
+name: Clearent container build and publish
+description: Builds, publishes and attests a Clearent application image.
+
+inputs:
+  application-directory:
+    description: Checked-out application repository directory.
+    required: true
+  registry:
+    description: Container registry hostname.
+    required: false
+    default: xplorcrsharedregistry.azurecr.io
+  registry-username:
+    description: Container registry username.
+    required: true
+  registry-password:
+    description: Container registry password.
+    required: true
+  image-repository:
+    description: Lowercase repository path within the registry.
+    required: true
+  image-tag:
+    description: Optional image tag; generated from UTC time and commit when omitted.
+    required: false
+    default: ""
+  push-latest:
+    description: Also publish the mutable latest tag for legacy compatibility.
+    required: false
+    default: "true"
+  dockerfile:
+    description: Optional Dockerfile path relative to the application directory.
+    required: false
+    default: ""
+  context:
+    description: Docker build context relative to the application directory.
+    required: false
+    default: .
+  build-arguments:
+    description: Non-secret Docker build arguments, one KEY=VALUE per line.
+    required: false
+    default: ""
+  azure-artifacts-pat:
+    description: Optional Azure Artifacts PAT exposed only as a BuildKit secret.
+    required: false
+    default: ""
+
+outputs:
+  digest:
+    description: Published image digest.
+    value: ${{ steps.build.outputs.digest }}
+  image-tag:
+    description: Canonical generated or supplied image tag.
+    value: ${{ steps.prepare.outputs.image-tag }}
+  image-reference:
+    description: Canonical registry/repository:tag reference.
+    value: ${{ steps.prepare.outputs.image-reference }}
+
+runs:
+  using: composite
+  steps:
+    - name: Prepare image metadata
+      id: prepare
+      shell: bash
+      env:
+        CLEARENT_APPLICATION_DIRECTORY: ${{ inputs.application-directory }}
+        CLEARENT_CONTAINER_REGISTRY: ${{ inputs.registry }}
+        CLEARENT_IMAGE_REPOSITORY: ${{ inputs.image-repository }}
+        CLEARENT_IMAGE_TAG: ${{ inputs.image-tag }}
+        CLEARENT_PUSH_LATEST: ${{ inputs.push-latest }}
+        CLEARENT_DOCKERFILE: ${{ inputs.dockerfile }}
+        CLEARENT_BUILD_CONTEXT: ${{ inputs.context }}
+      run: bash "$GITHUB_ACTION_PATH/prepare.sh"
+
+    - name: Log in to the container registry
+      uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+      with:
+        registry: ${{ inputs.registry }}
+        username: ${{ inputs.registry-username }}
+        password: ${{ inputs.registry-password }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+    - name: Build and publish image
+      id: build
+      uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+      with:
+        context: ${{ steps.prepare.outputs.context }}
+        file: ${{ steps.prepare.outputs.dockerfile }}
+        push: true
+        tags: ${{ steps.prepare.outputs.tags }}
+        build-args: ${{ inputs.build-arguments }}
+        secrets: |
+          AZURE_ARTIFACTS_PAT=${{ inputs.azure-artifacts-pat }}
+        provenance: mode=max
+        sbom: true
+
+    - name: Attest published image
+      uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+      with:
+        subject-name: ${{ inputs.registry }}/${{ inputs.image-repository }}
+        subject-digest: ${{ steps.build.outputs.digest }}
+        push-to-registry: true

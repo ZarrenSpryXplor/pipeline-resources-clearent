@@ -1,0 +1,52 @@
+name: Clearent coverage report
+description: Validates and publishes Cobertura or JaCoCo line-coverage evidence.
+
+inputs:
+  coverage-file:
+    description: Absolute path to a Cobertura or JaCoCo XML report.
+    required: true
+  coverage-format:
+    description: auto, cobertura or jacoco.
+    required: false
+    default: auto
+  minimum-threshold:
+    description: Minimum acceptable line coverage percentage.
+    required: false
+    default: "0"
+  artifact-name:
+    description: Name of the uploaded coverage artifact.
+    required: false
+    default: clearent-coverage
+  artifact-retention-days:
+    description: Number of days to retain coverage evidence.
+    required: false
+    default: "7"
+
+outputs:
+  coverage-percent:
+    description: Measured line coverage percentage.
+    value: ${{ steps.measure.outputs.coverage-percent }}
+  coverage-format:
+    description: Detected or selected report format.
+    value: ${{ steps.measure.outputs.coverage-format }}
+
+runs:
+  using: composite
+  steps:
+    - name: Measure and enforce coverage
+      id: measure
+      shell: pwsh
+      env:
+        CLEARENT_COVERAGE_FILE: ${{ inputs.coverage-file }}
+        CLEARENT_COVERAGE_FORMAT: ${{ inputs.coverage-format }}
+        CLEARENT_COVERAGE_MINIMUM: ${{ inputs.minimum-threshold }}
+      run: |
+        & "$env:GITHUB_ACTION_PATH/Measure-ClearentCoverage.ps1" -CoverageFile $env:CLEARENT_COVERAGE_FILE -Format $env:CLEARENT_COVERAGE_FORMAT -MinimumThreshold $env:CLEARENT_COVERAGE_MINIMUM
+
+    - name: Upload coverage evidence
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.coverage-file }}
+        if-no-files-found: error
+        retention-days: ${{ inputs.artifact-retention-days }}

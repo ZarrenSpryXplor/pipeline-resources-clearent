@@ -1,0 +1,20 @@
+---
+$schema: ./agave-shared-sources.schema.json
+apiVersion: agave.platform.xplor/v1alpha1
+kind: AgaveSharedSourceCatalogue
+callerScopes:
+  - provider: github_actions
+    organisation: xplor-pay
+sources:
+  - sourceRef: shared-rabbitmq
+    properties:
+      - login
+      - password
+      - host
+      - port
+    attachments: []
+  - sourceRef: shared-clearent-truststore
+    properties:
+      - password
+    attachments:
+      - clearent_gateway.jks

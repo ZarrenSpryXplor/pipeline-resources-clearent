@@ -1,0 +1,42 @@
+{
+  "name": "Clearent deployment events",
+  "description": "Parse xplor.github-actions Kubernetes deployment Event notes into structured Clearent deployment telemetry.",
+  "enabled": true,
+  "hidden": false,
+  "creator": "github-actions",
+  "ruleMatchers": [],
+  "ruleSubgroups": [
+    {
+      "rules": [
+        {
+          "name": "Parse wrapped deployment Event note",
+          "description": "Parse the Kubernetes object wrapper used by the Coralogix cluster collector.",
+          "sourceField": "text.object.note",
+          "parameters": {
+            "parseParameters": {
+              "destinationField": "text",
+              "rule": "^Application=(?P<application>[^;]*);[ ]*Environment=(?P<environment>[^;]*);[ ]*Namespace=(?P<namespace>[^;]*);[ ]*ImageTag=(?P<image_tag>[^;]*);[ ]*BuildId=(?P<build_id>[^;]*);[ ]*JobAttempt=(?P<job_attempt>[^;]*);[ ]*JobId=(?P<job_id>[^;]*);[ ]*Pipeline=(?P<pipeline>[^;]*);[ ]*Commit=(?P<commit>[^;]*);[ ]*AgaveEnabled=(?P<agave_enabled>True|False);[ ]*Result=(?P<result>Succeeded|Failed);[ ]*DeploymentStartedAt=(?P<deployment_started_at>[^;]*);[ ]*DeploymentCompletedAt=(?P<deployment_completed_at>[^;]*);[ ]*TotalDurationMs=(?P<total_duration_ms>[^;]*);[ ]*TotalDurationSeconds=(?P<total_duration_seconds>[^;]*);[ ]*HelmStartedAt=(?P<helm_started_at>[^;]*);[ ]*HelmCompletedAt=(?P<helm_completed_at>[^;]*);[ ]*HelmDurationMs=(?P<helm_duration_ms>[^;]*);[ ]*HelmDurationSeconds=(?P<helm_duration_seconds>[^;]*);[ ]*HelmResult=(?P<helm_result>NotStarted|Succeeded|Failed)(?:;[ ]*AgaveSyncMode=(?P<agave_sync_mode>governed|continuous);[ ]*AgaveRefreshInterval=(?P<agave_refresh_interval>6h|12h);[ ]*AgaveRecordCount=(?P<agave_record_count>[0-9]+);[ ]*AgaveFieldCount=(?P<agave_field_count>[0-9]+);[ ]*AgaveTemplateCount=(?P<agave_template_count>[0-9]+))?$"
+            }
+          },
+          "enabled": true,
+          "order": 1
+        },
+        {
+          "name": "Parse direct deployment Event note",
+          "description": "Compatibility rule for collectors that expose the Event body directly.",
+          "sourceField": "text.note",
+          "parameters": {
+            "parseParameters": {
+              "destinationField": "text",
+              "rule": "^Application=(?P<application>[^;]*);[ ]*Environment=(?P<environment>[^;]*);[ ]*Namespace=(?P<namespace>[^;]*);[ ]*ImageTag=(?P<image_tag>[^;]*);[ ]*BuildId=(?P<build_id>[^;]*);[ ]*JobAttempt=(?P<job_attempt>[^;]*);[ ]*JobId=(?P<job_id>[^;]*);[ ]*Pipeline=(?P<pipeline>[^;]*);[ ]*Commit=(?P<commit>[^;]*);[ ]*AgaveEnabled=(?P<agave_enabled>True|False);[ ]*Result=(?P<result>Succeeded|Failed);[ ]*DeploymentStartedAt=(?P<deployment_started_at>[^;]*);[ ]*DeploymentCompletedAt=(?P<deployment_completed_at>[^;]*);[ ]*TotalDurationMs=(?P<total_duration_ms>[^;]*);[ ]*TotalDurationSeconds=(?P<total_duration_seconds>[^;]*);[ ]*HelmStartedAt=(?P<helm_started_at>[^;]*);[ ]*HelmCompletedAt=(?P<helm_completed_at>[^;]*);[ ]*HelmDurationMs=(?P<helm_duration_ms>[^;]*);[ ]*HelmDurationSeconds=(?P<helm_duration_seconds>[^;]*);[ ]*HelmResult=(?P<helm_result>NotStarted|Succeeded|Failed)(?:;[ ]*AgaveSyncMode=(?P<agave_sync_mode>governed|continuous);[ ]*AgaveRefreshInterval=(?P<agave_refresh_interval>6h|12h);[ ]*AgaveRecordCount=(?P<agave_record_count>[0-9]+);[ ]*AgaveFieldCount=(?P<agave_field_count>[0-9]+);[ ]*AgaveTemplateCount=(?P<agave_template_count>[0-9]+))?$"
+            }
+          },
+          "enabled": true,
+          "order": 2
+        }
+      ],
+      "enabled": true,
+      "order": 1
+    }
+  ]
+}

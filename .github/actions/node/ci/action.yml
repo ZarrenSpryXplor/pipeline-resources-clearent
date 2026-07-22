@@ -1,0 +1,137 @@
+name: Clearent Node continuous integration
+description: Runs deterministic install, lint, test, coverage and build tasks for Angular or Vue.
+
+inputs:
+  application-directory:
+    description: Checked-out application repository directory.
+    required: true
+  node-version:
+    description: Node.js version accepted by actions/setup-node.
+    required: false
+    default: "20"
+  lock-file:
+    description: npm lock file relative to the application directory.
+    required: false
+    default: package-lock.json
+  lint-script:
+    description: package.json script used when lint enforcement is enabled.
+    required: false
+    default: lint
+  test-script:
+    description: Non-watching package.json test script.
+    required: false
+    default: test:ci
+  build-script:
+    description: package.json production build script.
+    required: false
+    default: build
+  enforce-lint:
+    description: Require and run the configured lint script.
+    required: false
+    default: "false"
+  skip-tests:
+    description: Skip tests only for an explicitly approved migration exception.
+    required: false
+    default: "false"
+  require-coverage:
+    description: Fail when the configured coverage report is absent.
+    required: false
+    default: "true"
+  coverage-file:
+    description: Cobertura report path relative to the application directory.
+    required: false
+    default: coverage/cobertura-coverage.xml
+  test-results-path:
+    description: Test result path relative to the application directory.
+    required: false
+    default: test-results
+  registry-url:
+    description: npm registry used for dependency restore.
+    required: false
+    default: https://pkgs.dev.azure.com/xplortechnologies/_packaging/xplortechnologies/npm/registry/
+  registry-username:
+    description: npm registry username used for basic PAT authentication.
+    required: false
+    default: xplortechnologies
+  registry-auth-mode:
+    description: basic for Azure Artifacts PATs or token for bearer-token registries.
+    required: false
+    default: basic
+  require-package-auth:
+    description: Require a package-read token before npm executes.
+    required: false
+    default: "true"
+
+outputs:
+  coverage-file:
+    description: Absolute coverage report path when present.
+    value: ${{ steps.ci.outputs.coverage-file }}
+  test-results-path:
+    description: Absolute test result path when present.
+    value: ${{ steps.ci.outputs.test-results-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate Node CI inputs
+      shell: bash
+      env:
+        CLEARENT_APPLICATION_DIRECTORY: ${{ inputs.application-directory }}
+        CLEARENT_NODE_LOCK_FILE: ${{ inputs.lock-file }}
+        CLEARENT_NODE_LINT_SCRIPT: ${{ inputs.lint-script }}
+        CLEARENT_NODE_TEST_SCRIPT: ${{ inputs.test-script }}
+        CLEARENT_NODE_BUILD_SCRIPT: ${{ inputs.build-script }}
+        CLEARENT_ENFORCE_LINT: ${{ inputs.enforce-lint }}
+        CLEARENT_SKIP_TESTS: ${{ inputs.skip-tests }}
+        CLEARENT_REQUIRE_COVERAGE: ${{ inputs.require-coverage }}
+        CLEARENT_COVERAGE_FILE: ${{ inputs.coverage-file }}
+        CLEARENT_TEST_RESULTS_PATH: ${{ inputs.test-results-path }}
+        CLEARENT_NPM_REGISTRY_URL: ${{ inputs.registry-url }}
+        CLEARENT_NPM_REGISTRY_USERNAME: ${{ inputs.registry-username }}
+        CLEARENT_NPM_AUTH_MODE: ${{ inputs.registry-auth-mode }}
+        CLEARENT_REQUIRE_PACKAGE_AUTH: ${{ inputs.require-package-auth }}
+        CLEARENT_PACKAGE_READ_TOKEN: ${{ env.CLEARENT_PACKAGE_READ_TOKEN }}
+      run: bash "$GITHUB_ACTION_PATH/run.sh" validate
+
+    - name: Set up Node.js
+      uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+        cache-dependency-path: ${{ inputs.application-directory }}/${{ inputs.lock-file }}
+
+    - name: Configure npm repository
+      shell: pwsh
+      env:
+        CLEARENT_NPM_REGISTRY_URL: ${{ inputs.registry-url }}
+        CLEARENT_NPM_REGISTRY_USERNAME: ${{ inputs.registry-username }}
+        CLEARENT_NPM_AUTH_MODE: ${{ inputs.registry-auth-mode }}
+        CLEARENT_REQUIRE_PACKAGE_AUTH: ${{ inputs.require-package-auth }}
+        CLEARENT_PACKAGE_READ_TOKEN: ${{ env.CLEARENT_PACKAGE_READ_TOKEN }}
+      run: '& "$env:GITHUB_ACTION_PATH/../Configure-Npm.ps1"'
+
+    - name: Run Node CI
+      id: ci
+      shell: bash
+      env:
+        CLEARENT_APPLICATION_DIRECTORY: ${{ inputs.application-directory }}
+        CLEARENT_NODE_LOCK_FILE: ${{ inputs.lock-file }}
+        CLEARENT_NODE_LINT_SCRIPT: ${{ inputs.lint-script }}
+        CLEARENT_NODE_TEST_SCRIPT: ${{ inputs.test-script }}
+        CLEARENT_NODE_BUILD_SCRIPT: ${{ inputs.build-script }}
+        CLEARENT_ENFORCE_LINT: ${{ inputs.enforce-lint }}
+        CLEARENT_SKIP_TESTS: ${{ inputs.skip-tests }}
+        CLEARENT_REQUIRE_COVERAGE: ${{ inputs.require-coverage }}
+        CLEARENT_COVERAGE_FILE: ${{ inputs.coverage-file }}
+        CLEARENT_TEST_RESULTS_PATH: ${{ inputs.test-results-path }}
+        CLEARENT_NPM_REGISTRY_URL: ${{ inputs.registry-url }}
+        CLEARENT_NPM_REGISTRY_USERNAME: ${{ inputs.registry-username }}
+        CLEARENT_NPM_AUTH_MODE: ${{ inputs.registry-auth-mode }}
+        CLEARENT_REQUIRE_PACKAGE_AUTH: ${{ inputs.require-package-auth }}
+        CLEARENT_PACKAGE_READ_TOKEN: ${{ env.CLEARENT_PACKAGE_READ_TOKEN }}
+      run: bash "$GITHUB_ACTION_PATH/run.sh" ci
+
+    - name: Remove temporary npm credentials
+      if: ${{ always() }}
+      shell: pwsh
+      run: '& "$env:GITHUB_ACTION_PATH/../Configure-Npm.ps1" -Cleanup'

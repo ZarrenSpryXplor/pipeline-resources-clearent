@@ -1,0 +1,533 @@
+name: Clearent continuous integration
+
+on:
+  workflow_call:
+    inputs:
+      framework:
+        description: dotnet, java, angular, vue or py.
+        required: true
+        type: string
+      dotnet_version:
+        description: .NET SDK version used for .NET projects.
+        required: false
+        type: string
+        default: 8.0.x
+      java_version:
+        description: JDK version used for Java projects.
+        required: false
+        type: string
+        default: "13"
+      java_distribution:
+        description: JDK distribution used for Java projects.
+        required: false
+        type: string
+        default: temurin
+      node_version:
+        description: Node.js version used for Angular and Vue projects.
+        required: false
+        type: string
+        default: "20"
+      python_version:
+        description: Python version used for Python projects.
+        required: false
+        type: string
+        default: "3.12"
+      enforce_lint:
+        description: Run the target's configured lint task.
+        required: false
+        type: boolean
+        default: false
+      skip_tests:
+        description: Skip tests only for an explicitly approved migration exception.
+        required: false
+        type: boolean
+        default: false
+      require_coverage:
+        description: Require target-native coverage evidence when tests run.
+        required: false
+        type: boolean
+        default: true
+      minimum_coverage_threshold:
+        description: Minimum line coverage percentage for supported coverage reports.
+        required: false
+        type: string
+        default: "80"
+      artifact_retention_days:
+        description: Number of days to retain test and coverage evidence.
+        required: false
+        type: string
+        default: "7"
+      node_lock_file:
+        description: npm lock file relative to the repository root.
+        required: false
+        type: string
+        default: package-lock.json
+      node_lint_script:
+        description: Angular or Vue package.json lint script.
+        required: false
+        type: string
+        default: lint
+      node_test_script:
+        description: Angular or Vue non-watching test script.
+        required: false
+        type: string
+        default: test:ci
+      node_build_script:
+        description: Angular or Vue production build script.
+        required: false
+        type: string
+        default: build
+      node_coverage_file:
+        description: Node Cobertura path relative to the repository root.
+        required: false
+        type: string
+        default: coverage/cobertura-coverage.xml
+      npm_registry_url:
+        description: npm dependency registry.
+        required: false
+        type: string
+        default: https://pkgs.dev.azure.com/xplortechnologies/_packaging/xplortechnologies/npm/registry/
+      npm_registry_auth_mode:
+        description: basic for Azure Artifacts PATs or token for bearer-token registries.
+        required: false
+        type: string
+        default: basic
+      npm_require_package_auth:
+        description: Require npm authentication before dependency restore.
+        required: false
+        type: boolean
+        default: true
+      java_pom_file:
+        description: Maven POM path relative to the repository root.
+        required: false
+        type: string
+        default: pom.xml
+      java_lint_goals:
+        description: Optional Maven lint goals.
+        required: false
+        type: string
+        default: validate
+      java_test_goals:
+        description: Maven unit-test goals.
+        required: false
+        type: string
+        default: test
+      java_build_goals:
+        description: Maven package goals.
+        required: false
+        type: string
+        default: package
+      java_additional_arguments:
+        description: Additional Maven arguments, one complete argument per line.
+        required: false
+        type: string
+        default: ""
+      java_coverage_file:
+        description: JaCoCo path relative to the repository root.
+        required: false
+        type: string
+        default: target/site/jacoco/jacoco.xml
+      maven_repository_url:
+        description: Maven dependency repository and mirror.
+        required: false
+        type: string
+        default: https://pkgs.dev.azure.com/xplortechnologies/_packaging/xplortechnologies/maven/v1
+      python_requirements_file:
+        description: Python runtime requirements file.
+        required: false
+        type: string
+        default: requirements.txt
+      python_test_requirements_file:
+        description: Optional Python test requirements file.
+        required: false
+        type: string
+        default: ""
+      python_lint_module:
+        description: Python lint module used when lint enforcement is enabled.
+        required: false
+        type: string
+        default: ruff
+      python_test_path:
+        description: Python pytest discovery path.
+        required: false
+        type: string
+        default: .
+      python_coverage_source:
+        description: Python path or package measured by pytest-cov.
+        required: false
+        type: string
+        default: .
+      python_package_index_url:
+        description: Optional private Python simple-index URL.
+        required: false
+        type: string
+        default: ""
+      enable_ai_metrics:
+        description: Run the .NET-only Xplor AI Metrics analyser on the default branch.
+        required: false
+        type: boolean
+        default: true
+      ai_metrics_package_repository:
+        description: .NET tool package containing Xplor AI Metrics.
+        required: false
+        type: string
+        default: Xplor.AI.Metrics.BuildTool
+      ai_metrics_package_version:
+        description: Version of the .NET-only Xplor AI Metrics tool.
+        required: false
+        type: string
+        default: 1.0.2
+    secrets:
+      CLEARENT_PLATFORM_READ_TOKEN:
+        description: Read token used to retrieve the pinned central implementation.
+        required: true
+      PACKAGE_READ_TOKEN:
+        description: Package-read token used by NuGet, Maven, npm or pip.
+        required: false
+      PACKAGE_READ_USERNAME:
+        description: Package registry username.
+        required: false
+      AI_METRICS_SFTP_SERVER:
+        description: Azure Storage endpoint for .NET AI Metrics.
+        required: false
+      AI_METRICS_SAS_KEY:
+        description: Azure Storage SAS key for .NET AI Metrics.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Resolve trusted CI implementation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: none
+      id-token: write
+    outputs:
+      workflow_ref: ${{ steps.workflow-identity.outputs.workflow-ref }}
+      workflow_sha: ${{ steps.workflow-identity.outputs.workflow-sha }}
+    steps:
+      - name: Validate caller inputs
+        shell: pwsh
+        env:
+          CLEARENT_PLATFORM_READ_TOKEN: ${{ secrets.CLEARENT_PLATFORM_READ_TOKEN }}
+          CLEARENT_FRAMEWORK: ${{ inputs.framework }}
+          CLEARENT_REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          if ($env:CLEARENT_REPOSITORY_OWNER -cne "xplor-pay") {
+            throw "Clearent CI may be called only by repositories owned by xplor-pay."
+          }
+          if ([string]::IsNullOrWhiteSpace($env:CLEARENT_PLATFORM_READ_TOKEN)) {
+            throw "CLEARENT_PLATFORM_READ_TOKEN is required."
+          }
+          if ($env:CLEARENT_FRAMEWORK -cnotin @("dotnet", "java", "angular", "vue", "py")) {
+            throw "framework must be dotnet, java, angular, vue or py."
+          }
+
+      - name: Resolve called workflow identity
+        id: workflow-identity
+        shell: pwsh
+        env:
+          CLEARENT_EXPECTED_WORKFLOW_PATH: .github/workflows/clearent-ci-reusable.yml
+        run: |
+          $ErrorActionPreference = "Stop"
+          $audience = "xplor-pay/github-actions"
+          if (
+            [string]::IsNullOrWhiteSpace($env:ACTIONS_ID_TOKEN_REQUEST_URL) -or
+            [string]::IsNullOrWhiteSpace($env:ACTIONS_ID_TOKEN_REQUEST_TOKEN)
+          ) {
+            throw "GitHub OIDC is required to resolve the called workflow revision."
+          }
+          $separator = if ($env:ACTIONS_ID_TOKEN_REQUEST_URL.Contains("?")) { "&" } else { "?" }
+          $requestUri = "{0}{1}audience={2}" -f
+            $env:ACTIONS_ID_TOKEN_REQUEST_URL,
+            $separator,
+            [Uri]::EscapeDataString($audience)
+          $response = Invoke-RestMethod -Uri $requestUri -Headers @{
+            Authorization = "bearer $($env:ACTIONS_ID_TOKEN_REQUEST_TOKEN)"
+          }
+          $segments = @($response.value.Split("."))
+          if ($segments.Count -ne 3) {
+            throw "GitHub returned an invalid OIDC token."
+          }
+          $payloadText = $segments[1].Replace("-", "+").Replace("_", "/")
+          switch ($payloadText.Length % 4) {
+            0 { }
+            2 { $payloadText += "==" }
+            3 { $payloadText += "=" }
+            default { throw "GitHub returned an invalid OIDC payload." }
+          }
+          $payload = [Text.Encoding]::UTF8.GetString(
+            [Convert]::FromBase64String($payloadText)
+          ) | ConvertFrom-Json
+          $expectedPrefix = "xplor-pay/github-actions/$($env:CLEARENT_EXPECTED_WORKFLOW_PATH)@"
+          $workflowRef = [string]$payload.job_workflow_ref
+          $workflowSha = ([string]$payload.job_workflow_sha).ToLowerInvariant()
+          $calledReference = if ($workflowRef.StartsWith($expectedPrefix, [StringComparison]::Ordinal)) {
+            $workflowRef.Substring($expectedPrefix.Length)
+          } else {
+            ""
+          }
+          if (
+            $payload.iss -cne "https://token.actions.githubusercontent.com" -or
+            @($payload.aud) -cnotcontains $audience -or
+            $workflowSha -cnotmatch "^[0-9a-f]{40}$" -or
+            $calledReference -cne $workflowSha -or
+            [long]$payload.exp -le [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+          ) {
+            throw "The reusable workflow identity is invalid or is not pinned to a full commit SHA."
+          }
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "workflow-ref=$workflowRef"
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "workflow-sha=$workflowSha"
+
+  ci:
+    name: Build and test ${{ inputs.framework }}
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      pull-requests: write
+    steps:
+      - name: Check out application revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Check out pinned CI implementation
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: xplor-pay/github-actions
+          ref: ${{ needs.preflight.outputs.workflow_sha }}
+          token: ${{ secrets.CLEARENT_PLATFORM_READ_TOKEN }}
+          path: .clearent-platform
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Review dependency changes
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          comment-summary-in-pr: always
+
+      - name: Set up .NET
+        if: ${{ inputs.framework == 'dotnet' }}
+        uses: ./.clearent-platform/.github/actions/dotnet/environment_setup
+        with:
+          dotnet_version: ${{ inputs.dotnet_version }}
+
+      - name: Restore .NET dependencies
+        if: ${{ inputs.framework == 'dotnet' }}
+        uses: ./.clearent-platform/.github/actions/dotnet/run_dotnet
+        env:
+          GITHUB_USERNAME: ${{ secrets.PACKAGE_READ_USERNAME }}
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_READ_TOKEN }}
+          GITHUB_ORG: ${{ github.repository_owner }}
+        with:
+          command: restore
+          arguments: |
+            --configfile
+            ./nuget.config
+
+      - name: Enforce .NET code style
+        if: ${{ inputs.framework == 'dotnet' && inputs.enforce_lint }}
+        uses: ./.clearent-platform/.github/actions/dotnet/run_dotnet
+        with:
+          command: format
+          arguments: |
+            --verbosity
+            detailed
+            --verify-no-changes
+
+      - name: Build .NET
+        if: ${{ inputs.framework == 'dotnet' }}
+        uses: ./.clearent-platform/.github/actions/dotnet/run_dotnet
+        with:
+          command: build
+          arguments: |
+            --configuration
+            Release
+            --no-restore
+            -p:CopyLocalLockFileAssemblies=true
+
+      - name: Test .NET
+        if: ${{ inputs.framework == 'dotnet' && !inputs.skip_tests }}
+        uses: ./.clearent-platform/.github/actions/dotnet/run_dotnet
+        with:
+          command: test
+          arguments: |
+            --configuration
+            Release
+            --no-build
+            --no-restore
+            --verbosity
+            normal
+            --filter:TestCategory!~Integration&Category!~Integration
+            --collect:XPlat Code Coverage;Format=opencover,cobertura
+            --results-directory
+            ./TestResults
+
+      - name: Report .NET coverage
+        if: ${{ inputs.framework == 'dotnet' && !inputs.skip_tests && inputs.require_coverage }}
+        uses: ./.clearent-platform/.github/actions/dotnet/coverage
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          dotnet_version: ${{ inputs.dotnet_version }}
+          minimum_coverage_threshold: ${{ inputs.minimum_coverage_threshold }}
+          artifact_retention_days: ${{ inputs.artifact_retention_days }}
+
+      - name: Run Java CI
+        id: java
+        if: ${{ inputs.framework == 'java' }}
+        uses: ./.clearent-platform/.github/actions/java/ci
+        env:
+          CLEARENT_PACKAGE_READ_TOKEN: ${{ secrets.PACKAGE_READ_TOKEN }}
+        with:
+          application-directory: ${{ github.workspace }}
+          java-version: ${{ inputs.java_version }}
+          java-distribution: ${{ inputs.java_distribution }}
+          pom-file: ${{ inputs.java_pom_file }}
+          lint-goals: ${{ inputs.java_lint_goals }}
+          test-goals: ${{ inputs.java_test_goals }}
+          build-goals: ${{ inputs.java_build_goals }}
+          additional-arguments: ${{ inputs.java_additional_arguments }}
+          enforce-lint: ${{ inputs.enforce_lint }}
+          skip-tests: ${{ inputs.skip_tests }}
+          require-coverage: ${{ inputs.require_coverage }}
+          coverage-file: ${{ inputs.java_coverage_file }}
+          repository-url: ${{ inputs.maven_repository_url }}
+          repository-username: ${{ secrets.PACKAGE_READ_USERNAME || 'xplortechnologies' }}
+
+      - name: Report Java coverage
+        if: ${{ inputs.framework == 'java' && steps.java.outputs.coverage-file != '' }}
+        uses: ./.clearent-platform/.github/actions/coverage-report
+        with:
+          coverage-file: ${{ steps.java.outputs.coverage-file }}
+          coverage-format: jacoco
+          minimum-threshold: ${{ inputs.minimum_coverage_threshold }}
+          artifact-name: java-coverage-${{ github.run_attempt }}
+          artifact-retention-days: ${{ inputs.artifact_retention_days }}
+
+      - name: Upload Java test results
+        if: ${{ always() && inputs.framework == 'java' && steps.java.outputs.test-results-path != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: java-test-results-${{ github.run_attempt }}
+          path: ${{ steps.java.outputs.test-results-path }}
+          if-no-files-found: warn
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+      - name: Run Node CI
+        id: node
+        if: ${{ inputs.framework == 'angular' || inputs.framework == 'vue' }}
+        uses: ./.clearent-platform/.github/actions/node/ci
+        env:
+          CLEARENT_PACKAGE_READ_TOKEN: ${{ secrets.PACKAGE_READ_TOKEN }}
+        with:
+          application-directory: ${{ github.workspace }}
+          node-version: ${{ inputs.node_version }}
+          lock-file: ${{ inputs.node_lock_file }}
+          lint-script: ${{ inputs.node_lint_script }}
+          test-script: ${{ inputs.node_test_script }}
+          build-script: ${{ inputs.node_build_script }}
+          enforce-lint: ${{ inputs.enforce_lint }}
+          skip-tests: ${{ inputs.skip_tests }}
+          require-coverage: ${{ inputs.require_coverage }}
+          coverage-file: ${{ inputs.node_coverage_file }}
+          registry-url: ${{ inputs.npm_registry_url }}
+          registry-username: ${{ secrets.PACKAGE_READ_USERNAME || 'xplortechnologies' }}
+          registry-auth-mode: ${{ inputs.npm_registry_auth_mode }}
+          require-package-auth: ${{ inputs.npm_require_package_auth }}
+
+      - name: Report Node coverage
+        if: ${{ (inputs.framework == 'angular' || inputs.framework == 'vue') && steps.node.outputs.coverage-file != '' }}
+        uses: ./.clearent-platform/.github/actions/coverage-report
+        with:
+          coverage-file: ${{ steps.node.outputs.coverage-file }}
+          coverage-format: cobertura
+          minimum-threshold: ${{ inputs.minimum_coverage_threshold }}
+          artifact-name: ${{ inputs.framework }}-coverage-${{ github.run_attempt }}
+          artifact-retention-days: ${{ inputs.artifact_retention_days }}
+
+      - name: Upload Node test results
+        if: ${{ always() && (inputs.framework == 'angular' || inputs.framework == 'vue') && steps.node.outputs.test-results-path != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ inputs.framework }}-test-results-${{ github.run_attempt }}
+          path: ${{ steps.node.outputs.test-results-path }}
+          if-no-files-found: warn
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+      - name: Run Python CI
+        id: python
+        if: ${{ inputs.framework == 'py' }}
+        uses: ./.clearent-platform/.github/actions/python/ci
+        env:
+          CLEARENT_PACKAGE_READ_TOKEN: ${{ secrets.PACKAGE_READ_TOKEN }}
+        with:
+          application-directory: ${{ github.workspace }}
+          python-version: ${{ inputs.python_version }}
+          requirements-file: ${{ inputs.python_requirements_file }}
+          test-requirements-file: ${{ inputs.python_test_requirements_file }}
+          lint-module: ${{ inputs.python_lint_module }}
+          test-path: ${{ inputs.python_test_path }}
+          coverage-source: ${{ inputs.python_coverage_source }}
+          enforce-lint: ${{ inputs.enforce_lint }}
+          skip-tests: ${{ inputs.skip_tests }}
+          require-coverage: ${{ inputs.require_coverage }}
+          package-index-url: ${{ inputs.python_package_index_url }}
+          package-index-username: ${{ secrets.PACKAGE_READ_USERNAME || 'xplortechnologies' }}
+
+      - name: Report Python coverage
+        if: ${{ inputs.framework == 'py' && steps.python.outputs.coverage-file != '' }}
+        uses: ./.clearent-platform/.github/actions/coverage-report
+        with:
+          coverage-file: ${{ steps.python.outputs.coverage-file }}
+          coverage-format: cobertura
+          minimum-threshold: ${{ inputs.minimum_coverage_threshold }}
+          artifact-name: python-coverage-${{ github.run_attempt }}
+          artifact-retention-days: ${{ inputs.artifact_retention_days }}
+
+      - name: Upload Python test results
+        if: ${{ always() && inputs.framework == 'py' && steps.python.outputs.test-results-path != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: python-test-results-${{ github.run_attempt }}
+          path: ${{ steps.python.outputs.test-results-path }}
+          if-no-files-found: warn
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+      - name: Install .NET AI Metrics tools
+        if: ${{ inputs.framework == 'dotnet' && inputs.enable_ai_metrics && !inputs.skip_tests && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+        uses: ./.clearent-platform/.github/actions/dotnet/ai_metrics_install
+        env:
+          GITHUB_USERNAME: ${{ secrets.PACKAGE_READ_USERNAME }}
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_READ_TOKEN }}
+          GITHUB_ORG: ${{ github.repository_owner }}
+          AI_METRICS_PACKAGE_VERSION: ${{ inputs.ai_metrics_package_version }}
+          AI_METRICS_PACKAGE_REPOSITORY: ${{ inputs.ai_metrics_package_repository }}
+        continue-on-error: true
+
+      - name: Analyse .NET AI Metrics
+        if: ${{ inputs.framework == 'dotnet' && inputs.enable_ai_metrics && !inputs.skip_tests && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+        uses: ./.clearent-platform/.github/actions/dotnet/ai_metrics_analyze
+        env:
+          AI_METRICS_PACKAGE_REPOSITORY: ${{ inputs.ai_metrics_package_repository }}
+        continue-on-error: true
+
+      - name: Publish .NET AI Metrics
+        if: ${{ inputs.framework == 'dotnet' && inputs.enable_ai_metrics && !inputs.skip_tests && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+        uses: ./.clearent-platform/.github/actions/dotnet/ai_metrics_publish
+        with:
+          sftp_server: ${{ secrets.AI_METRICS_SFTP_SERVER }}
+          ai_path: ${{ vars.AI_METRICS_AI_PATH }}
+          coverage_path: ${{ vars.AI_METRICS_COVERAGE_PATH }}
+          container_name: ${{ vars.AI_METRICS_CONTAINER_NAME }}
+          sas_key: ${{ secrets.AI_METRICS_SAS_KEY }}
+        continue-on-error: true

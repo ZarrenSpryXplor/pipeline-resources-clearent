@@ -1,0 +1,140 @@
+name: Clearent Java continuous integration
+description: Runs Maven lint, tests, JaCoCo evidence and package compilation for Spring applications.
+
+inputs:
+  application-directory:
+    description: Checked-out application repository directory.
+    required: true
+  java-version:
+    description: JDK version accepted by actions/setup-java.
+    required: false
+    default: "13"
+  java-distribution:
+    description: JDK distribution accepted by actions/setup-java.
+    required: false
+    default: temurin
+  pom-file:
+    description: Maven POM path relative to the application directory.
+    required: false
+    default: pom.xml
+  lint-goals:
+    description: Optional space-separated Maven goals used when lint enforcement is enabled.
+    required: false
+    default: validate
+  test-goals:
+    description: Space-separated Maven unit-test goals.
+    required: false
+    default: test
+  build-goals:
+    description: Space-separated Maven package goals.
+    required: false
+    default: package
+  additional-arguments:
+    description: Additional Maven arguments, one complete argument per line.
+    required: false
+    default: ""
+  enforce-lint:
+    description: Run the configured lint goals.
+    required: false
+    default: "false"
+  skip-tests:
+    description: Skip tests only for an explicitly approved migration exception.
+    required: false
+    default: "false"
+  require-coverage:
+    description: Fail when the configured JaCoCo report is absent.
+    required: false
+    default: "true"
+  coverage-file:
+    description: JaCoCo report path relative to the application directory.
+    required: false
+    default: target/site/jacoco/jacoco.xml
+  test-results-path:
+    description: Surefire result path relative to the application directory.
+    required: false
+    default: target/surefire-reports
+  repository-url:
+    description: Maven repository and mirror URL.
+    required: false
+    default: https://pkgs.dev.azure.com/xplortechnologies/_packaging/xplortechnologies/maven/v1
+  repository-id:
+    description: Maven server and repository identifier.
+    required: false
+    default: xplortechnologies
+  repository-username:
+    description: Maven repository username.
+    required: false
+    default: xplortechnologies
+  require-package-auth:
+    description: Require a package-read token before Maven executes.
+    required: false
+    default: "true"
+
+outputs:
+  coverage-file:
+    description: Absolute JaCoCo report path when present.
+    value: ${{ steps.ci.outputs.coverage-file }}
+  test-results-path:
+    description: Absolute Surefire result path when present.
+    value: ${{ steps.ci.outputs.test-results-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate Java CI inputs
+      shell: bash
+      env:
+        CLEARENT_APPLICATION_DIRECTORY: ${{ inputs.application-directory }}
+        CLEARENT_JAVA_POM_FILE: ${{ inputs.pom-file }}
+        CLEARENT_MAVEN_LINT_GOALS: ${{ inputs.lint-goals }}
+        CLEARENT_MAVEN_TEST_GOALS: ${{ inputs.test-goals }}
+        CLEARENT_MAVEN_BUILD_GOALS: ${{ inputs.build-goals }}
+        CLEARENT_MAVEN_ADDITIONAL_ARGUMENTS: ${{ inputs.additional-arguments }}
+        CLEARENT_ENFORCE_LINT: ${{ inputs.enforce-lint }}
+        CLEARENT_SKIP_TESTS: ${{ inputs.skip-tests }}
+        CLEARENT_REQUIRE_COVERAGE: ${{ inputs.require-coverage }}
+        CLEARENT_REQUIRE_PACKAGE_AUTH: ${{ inputs.require-package-auth }}
+        CLEARENT_COVERAGE_FILE: ${{ inputs.coverage-file }}
+        CLEARENT_TEST_RESULTS_PATH: ${{ inputs.test-results-path }}
+      run: bash "$GITHUB_ACTION_PATH/run.sh" validate
+
+    - name: Set up Java
+      uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+      with:
+        distribution: ${{ inputs.java-distribution }}
+        java-version: ${{ inputs.java-version }}
+        cache: maven
+        cache-dependency-path: ${{ inputs.application-directory }}/${{ inputs.pom-file }}
+
+    - name: Configure Maven repository
+      shell: pwsh
+      env:
+        CLEARENT_MAVEN_REPOSITORY_URL: ${{ inputs.repository-url }}
+        CLEARENT_MAVEN_REPOSITORY_ID: ${{ inputs.repository-id }}
+        CLEARENT_MAVEN_REPOSITORY_USERNAME: ${{ inputs.repository-username }}
+        CLEARENT_PACKAGE_READ_TOKEN: ${{ env.CLEARENT_PACKAGE_READ_TOKEN }}
+        CLEARENT_REQUIRE_PACKAGE_AUTH: ${{ inputs.require-package-auth }}
+      run: '& "$env:GITHUB_ACTION_PATH/Configure-Maven.ps1"'
+
+    - name: Run Java CI
+      id: ci
+      shell: bash
+      env:
+        CLEARENT_APPLICATION_DIRECTORY: ${{ inputs.application-directory }}
+        CLEARENT_JAVA_POM_FILE: ${{ inputs.pom-file }}
+        CLEARENT_MAVEN_LINT_GOALS: ${{ inputs.lint-goals }}
+        CLEARENT_MAVEN_TEST_GOALS: ${{ inputs.test-goals }}
+        CLEARENT_MAVEN_BUILD_GOALS: ${{ inputs.build-goals }}
+        CLEARENT_MAVEN_ADDITIONAL_ARGUMENTS: ${{ inputs.additional-arguments }}
+        CLEARENT_ENFORCE_LINT: ${{ inputs.enforce-lint }}
+        CLEARENT_SKIP_TESTS: ${{ inputs.skip-tests }}
+        CLEARENT_REQUIRE_COVERAGE: ${{ inputs.require-coverage }}
+        CLEARENT_REQUIRE_PACKAGE_AUTH: ${{ inputs.require-package-auth }}
+        CLEARENT_COVERAGE_FILE: ${{ inputs.coverage-file }}
+        CLEARENT_TEST_RESULTS_PATH: ${{ inputs.test-results-path }}
+      run: bash "$GITHUB_ACTION_PATH/run.sh" ci
+
+    - name: Remove temporary Maven credentials
+      if: ${{ always() }}
+      shell: pwsh
+      run: '& "$env:GITHUB_ACTION_PATH/Configure-Maven.ps1" -Cleanup'

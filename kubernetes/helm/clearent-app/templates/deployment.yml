@@ -1,0 +1,106 @@
+{{- if eq (include "common.isDeployment" .) "true" }}
+{{- $agaveEnabled := eq (include "common.agaveEnabled" .) "true" -}}
+{{- $agave := .Values.agave | default dict -}}
+{{- $rolloutGate := get $agave "rolloutGate" | default "closed" | toString | lower -}}
+{{- $kerberos := .Values.kerberos | default dict -}}
+{{- $kerberosEnabled := get $kerberos "enabled" | default false -}}
+{{- $isNetworked := eq (include "common.isNetworked" .) "true" -}}
+{{- $applicationPort := .Values.ingress.backendTls | ternary 443 80 | int -}}
+{{- $healthPort := .Values.healthCheck.port | toString | atoi -}}
+{{- $reloadSecrets := list -}}
+{{- if $agaveEnabled -}}
+{{- $reloadSecrets = append $reloadSecrets (include "app.renderedConfigSecretName" .) -}}
+{{- end -}}
+{{- if $kerberosEnabled -}}
+{{- $reloadSecrets = append $reloadSecrets (include "app.kerberosCredentialsName" .) -}}
+{{- end -}}
+{{- if and $agaveEnabled (not (has $rolloutGate (list "closed" "open"))) -}}
+{{- fail (printf "Invalid agave.rolloutGate %q. Expected closed or open." $rolloutGate) -}}
+{{- end -}}
+
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: {{ include "app.name" . | quote }}
+  namespace: {{ include "app.namespace" . | quote }}
+  labels:
+    {{- include "common.labels" . | nindent 4 }}
+  annotations:
+    {{- include "common.annotations" . | nindent 4 }}
+{{ if $reloadSecrets }}
+    secret.reloader.stakater.com/reload: {{ join "," $reloadSecrets | quote }}
+{{ end }}
+{{ if $agaveEnabled }}
+    clearent.xplor/agave-rollout-gate: {{ $rolloutGate | quote }}
+{{ end }}
+
+spec:
+  replicas: {{ .Values.replicas }}
+{{ if $agaveEnabled }}
+  # A paused existing Deployment keeps its current ReplicaSet serving at the
+  # desired replica count. A new paused Deployment creates no Pods until the
+  # platform proves that ESO and the target Secret are fresh.
+  paused: {{ eq $rolloutGate "closed" }}
+{{ end }}
+
+  selector:
+    matchLabels:
+      {{- include "common.selectorLabels" . | nindent 6 }}
+
+  strategy:
+    type: RollingUpdate
+
+  template:
+    metadata:
+      labels:
+        {{- include "common.labels" . | nindent 8 }}
+      annotations:
+        {{- include "common.annotations" . | nindent 8 }}
+        sidecar.istio.io/proxyCPU: "50m"
+        sidecar.istio.io/proxyCPULimit: "1"
+        sidecar.istio.io/proxyMemory: "128Mi"
+        sidecar.istio.io/proxyMemoryLimit: "1Gi"
+
+    spec:
+      securityContext:
+        {{- toYaml (.Values.podSecurityContext | default dict) | nindent 8 }}
+
+      imagePullSecrets:
+        - name: acr-pull
+
+      containers:
+        - name: {{ include "app.name" . | quote }}
+          image: {{ printf "%s/%s:%s" .Values.image.registry .Values.image.repository .Values.image.tag | quote }}
+
+          {{- include "common.securityContext" . | nindent 10 }}
+
+          {{- include "common.envVars" . | nindent 10 }}
+
+          ports:
+{{ if $isNetworked }}
+            - name: {{ .Values.ingress.backendTls | ternary "https" "http" }}
+              containerPort: {{ $applicationPort }}
+{{ end }}
+{{ if or (not $isNetworked) (ne $healthPort $applicationPort) }}
+            - name: health
+              containerPort: {{ $healthPort }}
+{{ end }}
+
+          {{- include "common.healthChecks" . | nindent 10 }}
+
+          volumeMounts:
+            {{- include "common.volumeMounts" . | nindent 12 }}
+
+          resources:
+            {{- include "common.resources" . | nindent 12 }}
+
+{{ if or (not $agaveEnabled) $kerberosEnabled }}
+      initContainers:
+        {{- include "common.initContainers" . | nindent 8 }}
+
+{{ end }}
+      volumes:
+        {{- include "common.volumes" . | nindent 8 }}
+
+{{- end }}

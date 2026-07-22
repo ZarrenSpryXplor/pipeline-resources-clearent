@@ -1,0 +1,1017 @@
+{
+  "id": "cAgaveContractHealth1",
+  "name": "Clearent Agave Contract & Synchronisation Health",
+  "description": "Clearent deployment-time Agave adoption, configuration and contract-size telemetry.",
+  "layout": {
+    "sections": [
+      {
+        "id": {
+          "value": "73898fa5-08c3-4829-a3f4-31f716f1225f"
+        },
+        "rows": [
+          {
+            "id": {
+              "value": "2a3816f1-2924-4d0e-beaf-1980c2909c52"
+            },
+            "appearance": {
+              "height": 18
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "d148542d-21e8-41cc-be96-41c6205ec106"
+                },
+                "title": "Dashboard Guide",
+                "definition": {
+                  "markdown": {
+                    "markdownText": "# Agave Contract & Synchronisation Health\n\nThis dashboard uses Agave configuration snapshots attached to Clearent deployment Events.\n\n## Available now\n- Agave deployment adoption and optional-snapshot coverage\n- Governed versus continuous configuration mode\n- Refresh interval\n- Provider-record, mapped-field and template counts\n- Application-level configuration trends and recent snapshots\n\n## Telemetry boundary\nThese are **deployment-time contract snapshots**. Continuous mode is a configuration value, not evidence that a synchronisation ran. API-call volume, synchronisation success/failure, duration and freshness require a future dedicated Agave synchronisation event contract.\n\nThe optional five-field suffix is all-or-nothing and may be absent when the Kubernetes Event note would exceed 1,024 UTF-8 bytes."
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "options": {
+          "internal": {}
+        }
+      },
+      {
+        "id": {
+          "value": "da5a009e-4bca-45b5-9e14-a046edf6351b"
+        },
+        "rows": [
+          {
+            "id": {
+              "value": "34fdff14-f568-450f-a023-35a0fec6b3f3"
+            },
+            "appearance": {
+              "height": 23
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "ecc21a79-ce97-487b-a47e-189bf58d4414"
+                },
+                "title": "Agave-enabled Attempts",
+                "definition": {
+                  "gauge": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.agave_enabled == 'True' | aggregate count() as agave_attempts"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "min": 0,
+                    "max": 1000,
+                    "showInnerArc": true,
+                    "showOuterArc": true,
+                    "unit": "UNIT_NUMBER",
+                    "thresholds": [
+                      {
+                        "from": 0,
+                        "color": "var(--c-visualization-green-600)",
+                        "label": "Agave-enabled Attempts"
+                      }
+                    ],
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                    "thresholdBy": "THRESHOLD_BY_UNSPECIFIED",
+                    "decimal": 0,
+                    "thresholdType": "THRESHOLD_TYPE_ABSOLUTE",
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": false,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "legendBy": "LEGEND_BY_GROUPS",
+                    "displaySeriesName": true,
+                    "arcDisplay": {
+                      "valueArc": true,
+                      "thresholdArc": true
+                    },
+                    "showMinMax": false
+                  }
+                },
+                "description": "Deployment attempts using Agave."
+              },
+              {
+                "id": {
+                  "value": "9362fb02-be9a-4cf1-9fa5-93b7c35c3ba0"
+                },
+                "title": "Complete Contract Snapshots",
+                "definition": {
+                  "gauge": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.agave_enabled == 'True' | filter $d.agave_sync_mode != null | aggregate count() as complete_snapshots"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "min": 0,
+                    "max": 1000,
+                    "showInnerArc": true,
+                    "showOuterArc": true,
+                    "unit": "UNIT_NUMBER",
+                    "thresholds": [
+                      {
+                        "from": 0,
+                        "color": "var(--c-visualization-green-600)",
+                        "label": "Complete Contract Snapshots"
+                      }
+                    ],
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                    "thresholdBy": "THRESHOLD_BY_UNSPECIFIED",
+                    "decimal": 0,
+                    "thresholdType": "THRESHOLD_TYPE_ABSOLUTE",
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": false,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "legendBy": "LEGEND_BY_GROUPS",
+                    "displaySeriesName": true,
+                    "arcDisplay": {
+                      "valueArc": true,
+                      "thresholdArc": true
+                    },
+                    "showMinMax": false
+                  }
+                },
+                "description": "Agave attempts containing the complete optional five-field contract suffix."
+              },
+              {
+                "id": {
+                  "value": "9fedd73e-6e5f-4f27-9685-9137539a42d7"
+                },
+                "title": "Snapshot Coverage",
+                "definition": {
+                  "gauge": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.agave_enabled == 'True' | aggregate count() as agave_attempts, count_if($d.agave_sync_mode != null) as complete_snapshots | create snapshot_coverage from if(agave_attempts > 0, complete_snapshots / agave_attempts * 100, 0) | choose snapshot_coverage"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "min": 0,
+                    "max": 100,
+                    "showInnerArc": true,
+                    "showOuterArc": true,
+                    "unit": "UNIT_PERCENT",
+                    "thresholds": [
+                      {
+                        "from": 0,
+                        "color": "var(--c-visualization-green-600)",
+                        "label": "Snapshot Coverage"
+                      }
+                    ],
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                    "thresholdBy": "THRESHOLD_BY_UNSPECIFIED",
+                    "decimal": 2,
+                    "thresholdType": "THRESHOLD_TYPE_ABSOLUTE",
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": false,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "legendBy": "LEGEND_BY_GROUPS",
+                    "displaySeriesName": true,
+                    "arcDisplay": {
+                      "valueArc": true,
+                      "thresholdArc": true
+                    },
+                    "showMinMax": false
+                  }
+                },
+                "description": "Complete contract snapshots divided by Agave-enabled deployment attempts."
+              },
+              {
+                "id": {
+                  "value": "b13ad017-3254-4f53-b20f-233b2d0f977b"
+                },
+                "title": "Continuous-mode Snapshots",
+                "definition": {
+                  "gauge": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.agave_enabled == 'True' | filter $d.agave_sync_mode != null | filter $d.agave_sync_mode == 'continuous' | aggregate count() as continuous_snapshots"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "min": 0,
+                    "max": 1000,
+                    "showInnerArc": true,
+                    "showOuterArc": true,
+                    "unit": "UNIT_NUMBER",
+                    "thresholds": [
+                      {
+                        "from": 0,
+                        "color": "var(--c-visualization-green-600)",
+                        "label": "Continuous-mode Snapshots"
+                      }
+                    ],
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                    "thresholdBy": "THRESHOLD_BY_UNSPECIFIED",
+                    "decimal": 0,
+                    "thresholdType": "THRESHOLD_TYPE_ABSOLUTE",
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": false,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "legendBy": "LEGEND_BY_GROUPS",
+                    "displaySeriesName": true,
+                    "arcDisplay": {
+                      "valueArc": true,
+                      "thresholdArc": true
+                    },
+                    "showMinMax": false
+                  }
+                },
+                "description": "Complete deployment snapshots configured for continuous synchronisation."
+              },
+              {
+                "id": {
+                  "value": "587fbb57-bb71-4883-86f0-642da3b1f5f4"
+                },
+                "title": "Average Provider Records",
+                "definition": {
+                  "gauge": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.agave_enabled == 'True' | filter $d.agave_sync_mode != null | aggregate avg($d.agave_record_count:number) as average_records"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "min": 0,
+                    "max": 10,
+                    "showInnerArc": true,
+                    "showOuterArc": true,
+                    "unit": "UNIT_NUMBER",
+                    "thresholds": [
+                      {
+                        "from": 0,
+                        "color": "var(--c-visualization-green-600)",
+                        "label": "Average Provider Records"
+                      }
+                    ],
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                    "thresholdBy": "THRESHOLD_BY_UNSPECIFIED",
+                    "decimal": 2,
+                    "thresholdType": "THRESHOLD_TYPE_ABSOLUTE",
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": false,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "legendBy": "LEGEND_BY_GROUPS",
+                    "displaySeriesName": true,
+                    "arcDisplay": {
+                      "valueArc": true,
+                      "thresholdArc": true
+                    },
+                    "showMinMax": false
+                  }
+                },
+                "description": "Average provider records in complete deployment snapshots."
+              },
+              {
+                "id": {
+                  "value": "8a4d5763-95fa-4622-9cec-3db777ed0fc2"
+                },
+                "title": "Average Mapped Fields",
+                "definition": {
+                  "gauge": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.agave_enabled == 'True' | filter $d.agave_sync_mode != null | aggregate avg($d.agave_field_count:number) as average_fields"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "min": 0,
+                    "max": 50,
+                    "showInnerArc": true,
+                    "showOuterArc": true,
+                    "unit": "UNIT_NUMBER",
+                    "thresholds": [
+                      {
+                        "from": 0,
+                        "color": "var(--c-visualization-green-600)",
+                        "label": "Average Mapped Fields"
+                      }
+                    ],
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                    "thresholdBy": "THRESHOLD_BY_UNSPECIFIED",
+                    "decimal": 2,
+                    "thresholdType": "THRESHOLD_TYPE_ABSOLUTE",
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": false,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "legendBy": "LEGEND_BY_GROUPS",
+                    "displaySeriesName": true,
+                    "arcDisplay": {
+                      "valueArc": true,
+                      "thresholdArc": true
+                    },
+                    "showMinMax": false
+                  }
+                },
+                "description": "Average mapped fields in complete deployment snapshots."
+              },
+              {
+                "id": {
+                  "value": "f83ab879-c797-466c-8cd6-f8da72d286ed"
+                },
+                "title": "Average Templates",
+                "definition": {
+                  "gauge": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.agave_enabled == 'True' | filter $d.agave_sync_mode != null | aggregate avg($d.agave_template_count:number) as average_templates"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "min": 0,
+                    "max": 100,
+                    "showInnerArc": true,
+                    "showOuterArc": true,
+                    "unit": "UNIT_NUMBER",
+                    "thresholds": [
+                      {
+                        "from": 0,
+                        "color": "var(--c-visualization-green-600)",
+                        "label": "Average Templates"
+                      }
+                    ],
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                    "thresholdBy": "THRESHOLD_BY_UNSPECIFIED",
+                    "decimal": 2,
+                    "thresholdType": "THRESHOLD_TYPE_ABSOLUTE",
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": false,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "legendBy": "LEGEND_BY_GROUPS",
+                    "displaySeriesName": true,
+                    "arcDisplay": {
+                      "valueArc": true,
+                      "thresholdArc": true
+                    },
+                    "showMinMax": false
+                  }
+                },
+                "description": "Average templates in complete deployment snapshots."
+              }
+            ]
+          }
+        ],
+        "options": {
+          "custom": {
+            "name": "Agave Snapshot Health",
+            "description": "Adoption and completeness of Agave deployment-time telemetry.",
+            "collapsed": false,
+            "color": {
+              "predefined": "SECTION_PREDEFINED_COLOR_UNSPECIFIED"
+            }
+          }
+        }
+      },
+      {
+        "id": {
+          "value": "9ef97690-f89d-44d0-92e2-77ef7dbc983d"
+        },
+        "rows": [
+          {
+            "id": {
+              "value": "0bea9c77-5a73-4b13-b1b6-d9f4f24e1b6b"
+            },
+            "appearance": {
+              "height": 25
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "f368feb4-554d-4dca-a059-f2c3f842465e"
+                },
+                "title": "Contract Size Over Time",
+                "description": "Average provider-record, mapped-field and template counts from complete snapshots.",
+                "definition": {
+                  "lineChart": {
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": true,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "tooltip": {
+                      "showLabels": false,
+                      "type": "TOOLTIP_TYPE_ALL"
+                    },
+                    "queryDefinitions": [
+                      {
+                        "id": "aa96aa88-5862-43f0-bfa3-90ee495c1eaf",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.agave_enabled == 'True' | filter $d.agave_sync_mode != null | groupby $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate avg($d.agave_record_count:number) as average_records"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_NUMBER",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "Provider records",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 2,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      },
+                      {
+                        "id": "2ded3c96-2ccc-4cc1-9fa4-f73b39ce52ef",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.agave_enabled == 'True' | filter $d.agave_sync_mode != null | groupby $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate avg($d.agave_field_count:number) as average_fields"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_NUMBER",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "Mapped fields",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 2,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      },
+                      {
+                        "id": "c89df0d0-724d-485f-947f-9b5530858143",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.agave_enabled == 'True' | filter $d.agave_sync_mode != null | groupby $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate avg($d.agave_template_count:number) as average_templates"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_NUMBER",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "Templates",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 2,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      }
+                    ],
+                    "stackedLine": "STACKED_LINE_UNSPECIFIED",
+                    "connectNulls": false,
+                    "useDataTimeRange": false,
+                    "xAxisTimeFormat": "X_AXIS_TIME_FORMAT_AUTO"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": {
+              "value": "b2b80720-0dbe-47e9-a631-1b8148439ed1"
+            },
+            "appearance": {
+              "height": 24
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "3adedc09-de78-4ee8-a8a2-07c30b7dae62"
+                },
+                "title": "Sync Mode Snapshot Volume",
+                "description": "Deployment snapshots by configured Agave synchronisation mode.",
+                "definition": {
+                  "lineChart": {
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": true,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "tooltip": {
+                      "showLabels": false,
+                      "type": "TOOLTIP_TYPE_ALL"
+                    },
+                    "queryDefinitions": [
+                      {
+                        "id": "4726db25-7067-4d5b-8fe2-2e233b7ac41e",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.agave_enabled == 'True' | filter $d.agave_sync_mode != null | groupby $d.agave_sync_mode as sync_mode, $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate count() as snapshots"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_UNSPECIFIED",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "Sync mode",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 0,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      }
+                    ],
+                    "stackedLine": "STACKED_LINE_UNSPECIFIED",
+                    "connectNulls": false,
+                    "useDataTimeRange": false,
+                    "xAxisTimeFormat": "X_AXIS_TIME_FORMAT_AUTO"
+                  }
+                }
+              },
+              {
+                "id": {
+                  "value": "249df13c-e59a-4a98-809f-3b68cbab9754"
+                },
+                "title": "Refresh Interval Snapshot Volume",
+                "description": "Deployment snapshots by configured Agave refresh interval.",
+                "definition": {
+                  "lineChart": {
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": true,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "tooltip": {
+                      "showLabels": false,
+                      "type": "TOOLTIP_TYPE_ALL"
+                    },
+                    "queryDefinitions": [
+                      {
+                        "id": "3707565c-ab45-4f86-ba1e-e9c8e2372a2d",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.agave_enabled == 'True' | filter $d.agave_sync_mode != null | groupby $d.agave_refresh_interval as refresh_interval, $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate count() as snapshots"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_UNSPECIFIED",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "Refresh interval",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 0,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      }
+                    ],
+                    "stackedLine": "STACKED_LINE_UNSPECIFIED",
+                    "connectNulls": false,
+                    "useDataTimeRange": false,
+                    "xAxisTimeFormat": "X_AXIS_TIME_FORMAT_AUTO"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "options": {
+          "custom": {
+            "name": "Contract Configuration Trends",
+            "description": "How Agave contract shape and synchronisation configuration change between deployments.",
+            "collapsed": false,
+            "color": {
+              "predefined": "SECTION_PREDEFINED_COLOR_UNSPECIFIED"
+            }
+          }
+        }
+      },
+      {
+        "id": {
+          "value": "bfa06da6-9371-40f8-962d-d052a223b9eb"
+        },
+        "rows": [
+          {
+            "id": {
+              "value": "f006c662-8105-4bcd-b627-660650505f5a"
+            },
+            "appearance": {
+              "height": 26
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "20850636-f314-4f57-92ae-9bc10df75231"
+                },
+                "title": "Agave Deployment Volume by Application",
+                "description": "Agave-enabled deployment snapshots by application.",
+                "definition": {
+                  "lineChart": {
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": true,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "tooltip": {
+                      "showLabels": false,
+                      "type": "TOOLTIP_TYPE_ALL"
+                    },
+                    "queryDefinitions": [
+                      {
+                        "id": "7e62a71d-5cbc-4fbe-95c1-d2290ff947f7",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.agave_enabled == 'True' | groupby $d.application as application, $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate count() as attempts"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_UNSPECIFIED",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "Application",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 0,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      }
+                    ],
+                    "stackedLine": "STACKED_LINE_UNSPECIFIED",
+                    "connectNulls": false,
+                    "useDataTimeRange": false,
+                    "xAxisTimeFormat": "X_AXIS_TIME_FORMAT_AUTO"
+                  }
+                }
+              },
+              {
+                "id": {
+                  "value": "d17de1e3-2389-420a-88e7-4536f7f9e5b3"
+                },
+                "title": "Provider Records by Application",
+                "description": "Average provider-record count from complete snapshots.",
+                "definition": {
+                  "lineChart": {
+                    "legend": {
+                      "isVisible": true,
+                      "columns": [],
+                      "groupByQuery": true,
+                      "placement": "LEGEND_PLACEMENT_AUTO"
+                    },
+                    "tooltip": {
+                      "showLabels": false,
+                      "type": "TOOLTIP_TYPE_ALL"
+                    },
+                    "queryDefinitions": [
+                      {
+                        "id": "69b22ca9-6ba5-4ebc-a6ee-0f32e9812107",
+                        "query": {
+                          "dataprime": {
+                            "dataprimeQuery": {
+                              "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.agave_enabled == 'True' | filter $d.agave_sync_mode != null | groupby $d.application as application, $m.timestamp / $p.timeRange.suggestedInterval as timestamp aggregate avg($d.agave_record_count:number) as average_records"
+                            },
+                            "filters": []
+                          }
+                        },
+                        "seriesCountLimit": 20,
+                        "unit": "UNIT_NUMBER",
+                        "scaleType": "SCALE_TYPE_LINEAR",
+                        "name": "Application",
+                        "isVisible": true,
+                        "colorScheme": "classic",
+                        "dataModeType": "DATA_MODE_TYPE_ARCHIVE",
+                        "decimal": 2,
+                        "hashColors": false,
+                        "decimalPrecision": false
+                      }
+                    ],
+                    "stackedLine": "STACKED_LINE_UNSPECIFIED",
+                    "connectNulls": false,
+                    "useDataTimeRange": false,
+                    "xAxisTimeFormat": "X_AXIS_TIME_FORMAT_AUTO"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "options": {
+          "custom": {
+            "name": "Application Contract Analysis",
+            "description": "Agave adoption and contract size by application.",
+            "collapsed": false,
+            "color": {
+              "predefined": "SECTION_PREDEFINED_COLOR_UNSPECIFIED"
+            }
+          }
+        }
+      },
+      {
+        "id": {
+          "value": "710cc512-1fc0-4197-bf8d-cea86c34451c"
+        },
+        "rows": [
+          {
+            "id": {
+              "value": "222b0d17-f2c9-4411-bd55-51b1564ffa3a"
+            },
+            "appearance": {
+              "height": 36
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "910ae374-8c39-428e-a472-12cd7a90d83e"
+                },
+                "title": "Recent Complete Agave Contract Snapshots",
+                "description": "Newest deployment attempts containing the complete optional Agave contract suffix.",
+                "definition": {
+                  "dataTable": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.agave_enabled == 'True' | filter $d.agave_sync_mode != null | create event_time from if($d.object.eventTime_custom_timestamp != null, $d.object.eventTime_custom_timestamp, $d.eventTime_custom_timestamp) | create workload_kind from if($d.object.regarding.kind != null, $d.object.regarding.kind, $d.regarding.kind) | create workload_name from if($d.object.regarding.name != null, $d.object.regarding.name, $d.regarding.name)"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "resultsPerPage": 100,
+                    "rowStyle": "ROW_STYLE_ONE_LINE",
+                    "columns": [
+                      {
+                        "field": "$m.timestamp",
+                        "width": 210
+                      },
+                      {
+                        "field": "$m.ingressTimestamp",
+                        "width": 210
+                      },
+                      {
+                        "field": "$d.application",
+                        "width": 280
+                      },
+                      {
+                        "field": "$d.environment",
+                        "width": 160
+                      },
+                      {
+                        "field": "$d.namespace",
+                        "width": 150
+                      },
+                      {
+                        "field": "$d.agave_sync_mode",
+                        "width": 150
+                      },
+                      {
+                        "field": "$d.agave_refresh_interval",
+                        "width": 170
+                      },
+                      {
+                        "field": "$d.agave_record_count",
+                        "width": 160
+                      },
+                      {
+                        "field": "$d.agave_field_count",
+                        "width": 150
+                      },
+                      {
+                        "field": "$d.agave_template_count",
+                        "width": 170
+                      },
+                      {
+                        "field": "$d.result",
+                        "width": 120
+                      },
+                      {
+                        "field": "$d.job_attempt",
+                        "width": 110
+                      },
+                      {
+                        "field": "$d.job_id",
+                        "width": 310
+                      },
+                      {
+                        "field": "$d.build_id",
+                        "width": 120
+                      },
+                      {
+                        "field": "$d.image_tag",
+                        "width": 180
+                      },
+                      {
+                        "field": "$d.pipeline",
+                        "width": 240
+                      },
+                      {
+                        "field": "$d.commit",
+                        "width": 320
+                      },
+                      {
+                        "field": "$d.workload_kind",
+                        "width": 130
+                      },
+                      {
+                        "field": "$d.workload_name",
+                        "width": 260
+                      },
+                      {
+                        "field": "$d.event_time",
+                        "width": 245
+                      },
+                      {
+                        "field": "$d.resource.attributes.k8s_cluster_name",
+                        "width": 200
+                      }
+                    ],
+                    "orderBy": {
+                      "field": "$m.timestamp",
+                      "orderDirection": "ORDER_DIRECTION_DESC"
+                    },
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": {
+              "value": "73ffd7e6-8335-46f6-aacc-42ca234d9a9a"
+            },
+            "appearance": {
+              "height": 30
+            },
+            "widgets": [
+              {
+                "id": {
+                  "value": "f1f16b45-9e09-4e52-ba8c-c829fc1f61e4"
+                },
+                "title": "Agave Attempts Without Contract Details",
+                "description": "Agave-enabled attempts where the optional five-field suffix was unavailable or omitted by the Event note byte budget.",
+                "definition": {
+                  "dataTable": {
+                    "query": {
+                      "dataprime": {
+                        "dataprimeQuery": {
+                          "text": "source logs | filter ($d.object.note.startsWith('Application=') || $d.note.startsWith('Application=')) | filter $d.application != null | filter $d.agave_enabled == 'True' | filter $d.agave_sync_mode == null | create event_time from if($d.object.eventTime_custom_timestamp != null, $d.object.eventTime_custom_timestamp, $d.eventTime_custom_timestamp) | create workload_kind from if($d.object.regarding.kind != null, $d.object.regarding.kind, $d.regarding.kind) | create workload_name from if($d.object.regarding.name != null, $d.object.regarding.name, $d.regarding.name)"
+                        },
+                        "filters": []
+                      }
+                    },
+                    "resultsPerPage": 100,
+                    "rowStyle": "ROW_STYLE_ONE_LINE",
+                    "columns": [
+                      {
+                        "field": "$m.timestamp",
+                        "width": 210
+                      },
+                      {
+                        "field": "$m.ingressTimestamp",
+                        "width": 210
+                      },
+                      {
+                        "field": "$d.application",
+                        "width": 280
+                      },
+                      {
+                        "field": "$d.environment",
+                        "width": 160
+                      },
+                      {
+                        "field": "$d.namespace",
+                        "width": 150
+                      },
+                      {
+                        "field": "$d.agave_sync_mode",
+                        "width": 150
+                      },
+                      {
+                        "field": "$d.agave_refresh_interval",
+                        "width": 170
+                      },
+                      {
+                        "field": "$d.agave_record_count",
+                        "width": 160
+                      },
+                      {
+                        "field": "$d.agave_field_count",
+                        "width": 150
+                      },
+                      {
+                        "field": "$d.agave_template_count",
+                        "width": 170
+                      },
+                      {
+                        "field": "$d.result",
+                        "width": 120
+                      },
+                      {
+                        "field": "$d.job_attempt",
+                        "width": 110
+                      },
+                      {
+                        "field": "$d.job_id",
+                        "width": 310
+                      },
+                      {
+                        "field": "$d.build_id",
+                        "width": 120
+                      },
+                      {
+                        "field": "$d.image_tag",
+                        "width": 180
+                      },
+                      {
+                        "field": "$d.pipeline",
+                        "width": 240
+                      },
+                      {
+                        "field": "$d.commit",
+                        "width": 320
+                      },
+                      {
+                        "field": "$d.workload_kind",
+                        "width": 130
+                      },
+                      {
+                        "field": "$d.workload_name",
+                        "width": 260
+                      },
+                      {
+                        "field": "$d.event_time",
+                        "width": 245
+                      },
+                      {
+                        "field": "$d.resource.attributes.k8s_cluster_name",
+                        "width": 200
+                      }
+                    ],
+                    "orderBy": {
+                      "field": "$m.timestamp",
+                      "orderDirection": "ORDER_DIRECTION_DESC"
+                    },
+                    "dataModeType": "DATA_MODE_TYPE_ARCHIVE"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "options": {
+          "custom": {
+            "name": "Contract Investigation",
+            "description": "Deployment identities and Kubernetes context for Agave configuration snapshots.",
+            "collapsed": false,
+            "color": {
+              "predefined": "SECTION_PREDEFINED_COLOR_UNSPECIFIED"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "variables": [],
+  "variablesV2": [],
+  "filters": [],
+  "relativeTimeFrame": "604800s",
+  "annotations": [],
+  "off": {},
+  "actions": []
+}

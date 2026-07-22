@@ -1,0 +1,84 @@
+name: Publish Maven package
+description: Builds and publishes a Maven package using temporary Azure Artifacts credentials.
+
+inputs:
+  application-directory:
+    description: Checked-out package repository directory.
+    required: true
+  java-version:
+    description: JDK version accepted by actions/setup-java.
+    required: false
+    default: "13"
+  java-distribution:
+    description: JDK distribution accepted by actions/setup-java.
+    required: false
+    default: temurin
+  pom-file:
+    description: Maven POM relative to the package directory.
+    required: false
+    default: pom.xml
+  goals:
+    description: Maven publication goals.
+    required: false
+    default: clean deploy
+  additional-arguments:
+    description: Additional Maven arguments, one complete argument per line.
+    required: false
+    default: ""
+  repository-url:
+    description: Maven dependency and publication repository.
+    required: false
+    default: https://pkgs.dev.azure.com/xplortechnologies/_packaging/xplortechnologies/maven/v1
+  repository-id:
+    description: Maven server and repository identifier.
+    required: false
+    default: xplortechnologies
+  repository-username:
+    description: Maven repository username paired with the write token.
+    required: false
+    default: xplortechnologies
+
+runs:
+  using: composite
+  steps:
+    - name: Validate Maven publication inputs
+      shell: bash
+      env:
+        CLEARENT_APPLICATION_DIRECTORY: ${{ inputs.application-directory }}
+        CLEARENT_JAVA_POM_FILE: ${{ inputs.pom-file }}
+        CLEARENT_MAVEN_PUBLISH_GOALS: ${{ inputs.goals }}
+        CLEARENT_MAVEN_ADDITIONAL_ARGUMENTS: ${{ inputs.additional-arguments }}
+      run: bash "$GITHUB_ACTION_PATH/publish.sh" validate
+
+    - name: Set up Java
+      uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+      with:
+        distribution: ${{ inputs.java-distribution }}
+        java-version: ${{ inputs.java-version }}
+        cache: maven
+        cache-dependency-path: ${{ inputs.application-directory }}/${{ inputs.pom-file }}
+
+    - name: Configure Maven publication repository
+      shell: pwsh
+      env:
+        CLEARENT_MAVEN_REPOSITORY_URL: ${{ inputs.repository-url }}
+        CLEARENT_MAVEN_REPOSITORY_ID: ${{ inputs.repository-id }}
+        CLEARENT_MAVEN_REPOSITORY_USERNAME: ${{ inputs.repository-username }}
+        CLEARENT_PACKAGE_READ_TOKEN: ${{ env.CLEARENT_PACKAGE_WRITE_TOKEN }}
+        CLEARENT_REQUIRE_PACKAGE_AUTH: "true"
+      run: '& "$env:GITHUB_ACTION_PATH/../ci/Configure-Maven.ps1"'
+
+    - name: Publish Maven package
+      shell: bash
+      env:
+        CLEARENT_APPLICATION_DIRECTORY: ${{ inputs.application-directory }}
+        CLEARENT_JAVA_POM_FILE: ${{ inputs.pom-file }}
+        CLEARENT_MAVEN_PUBLISH_GOALS: ${{ inputs.goals }}
+        CLEARENT_MAVEN_ADDITIONAL_ARGUMENTS: ${{ inputs.additional-arguments }}
+        MAVEN_OPTS: -Xmx1024m
+      run: bash "$GITHUB_ACTION_PATH/publish.sh" publish
+
+    - name: Remove temporary Maven credentials
+      if: ${{ always() }}
+      shell: pwsh
+      run: '& "$env:GITHUB_ACTION_PATH/../ci/Configure-Maven.ps1" -Cleanup'

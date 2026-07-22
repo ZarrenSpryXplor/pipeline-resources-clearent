@@ -1,0 +1,23 @@
+{{- if eq (include "common.isNetworked" .) "true" -}}
+{{- include "common.validateIngress" . -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "app.name" . | quote }}
+  namespace: {{ include "app.namespace" . | quote }}
+  labels:
+    {{- include "common.labels" . | nindent 4 }}
+  annotations:
+    {{- include "common.annotations" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "common.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: {{ .Values.ingress.backendTls | ternary "https" "http" }}
+      port: {{ .Values.ingress.backendTls | ternary 443 80 }}
+      targetPort: {{ .Values.ingress.backendTls | ternary 443 80 }}
+    - name: health
+      port: 9000
+      targetPort: {{ .Values.healthCheck.port }}
+{{- end }}

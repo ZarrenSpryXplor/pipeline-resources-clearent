@@ -1,0 +1,84 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-systems
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-runners
+---
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: arc-controller
+  namespace: kube-system
+spec:
+  targetNamespace: arc-systems
+  chart: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller
+  version: "0.9.3"
+  valuesContent: |-
+    replicaCount: 1
+
+    podSecurityContext:
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
+
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      readOnlyRootFilesystem: true
+---
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: arc-runner-set
+  namespace: kube-system
+spec:
+  targetNamespace: arc-runners
+  chart: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+  version: "0.9.3"
+  valuesContent: |-
+    # Register the scale set at organisation scope so application repositories
+    # in xplor-pay can route jobs to it.
+    githubConfigUrl: https://github.com/xplor-pay
+
+    # Create this Secret separately in arc-runners. Never commit its token.
+    githubConfigSecret: arc-github-auth
+
+    # The controller is installed in a different namespace, so the scale-set
+    # chart cannot discover its ServiceAccount from namespace-local resources.
+    controllerServiceAccount:
+      namespace: arc-systems
+      name: arc-controller-gha-rs-controller
+
+    # ARC scale sets have one routing label: the scale-set name.
+    runnerScaleSetName: clearent-kubernetes
+
+    # runnerGroup is intentionally omitted, so GitHub's Default runner group
+    # is used. An organisation owner must allow the calling repositories to
+    # use that group if its access policy is restricted.
+
+    # Keep one runner warm so installation and GitHub registration failures
+    # are visible before the first deployment is queued.
+    minRunners: 1
+    maxRunners: 5
+
+    template:
+      spec:
+        imagePullSecrets:
+          - name: ghcr-pull
+        containers:
+          - name: runner
+            # This image must contain pwsh, Helm 3.12+, kubectl and, when
+            # Agave is enabled, Azure CLI with the azure-devops extension.
+            # Use edge for initial bootstrap; replace it with a release tag or
+            # digest after the first validated publication.
+            image: ghcr.io/xplor-pay/clearent-actions-runner:edge
+            imagePullPolicy: IfNotPresent
+            command:
+              - /home/runner/run.sh

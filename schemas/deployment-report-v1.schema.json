@@ -1,0 +1,292 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xplor.devops/schemas/deployment-report-v1.schema.json",
+  "title": "Xplor deployment report",
+  "description": "Secret-free, destination-neutral evidence for one deployment attempt.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "schemaVersion",
+    "reportId",
+    "generatedAt",
+    "platform",
+    "classification",
+    "application",
+    "environment",
+    "source",
+    "pipeline",
+    "artefact",
+    "configuration",
+    "timing",
+    "outcome",
+    "evidence",
+    "dataQuality"
+  ],
+  "properties": {
+    "apiVersion": { "const": "xplor.devops/v1alpha1" },
+    "kind": { "const": "DeploymentReport" },
+    "schemaVersion": { "const": "1.0.0" },
+    "reportId": { "type": "string", "minLength": 1 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "platform": { "const": "clearent" },
+    "classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["containsSecretValues", "valuesRedacted"],
+      "properties": {
+        "containsSecretValues": { "const": false },
+        "valuesRedacted": { "const": true }
+      }
+    },
+    "application": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "workloadName", "workloadKind", "namespace", "framework", "type"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nullableString" },
+        "workloadName": { "$ref": "#/$defs/nullableString" },
+        "workloadKind": { "enum": ["Deployment", "CronJob"] },
+        "namespace": { "$ref": "#/$defs/nullableString" },
+        "framework": { "$ref": "#/$defs/nullableString" },
+        "type": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configuration", "name", "lifecycleTier", "deploymentTarget", "kubernetesContext", "kubernetesApiServerSha256", "tlsCertificateVerification"],
+      "properties": {
+        "configuration": { "$ref": "#/$defs/nullableString" },
+        "name": { "$ref": "#/$defs/nullableString" },
+        "lifecycleTier": { "$ref": "#/$defs/nullableString" },
+        "deploymentTarget": { "$ref": "#/$defs/nullableString" },
+        "kubernetesContext": { "$ref": "#/$defs/nullableString" },
+        "kubernetesApiServerSha256": { "$ref": "#/$defs/nullableSha256" },
+        "tlsCertificateVerification": { "enum": ["enabled", "disabled", "unknown"] }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "branch", "commit"],
+      "properties": {
+        "repository": { "$ref": "#/$defs/nullableString" },
+        "branch": { "$ref": "#/$defs/nullableString" },
+        "commit": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "pipeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "organisation", "repository", "workflowName", "workflowRef", "workflowSha", "runId", "runNumber", "jobId", "attempt", "runUri"],
+      "properties": {
+        "provider": { "const": "github_actions" },
+        "organisation": { "$ref": "#/$defs/nullableString" },
+        "repository": { "$ref": "#/$defs/nullableString" },
+        "workflowName": { "$ref": "#/$defs/nullableString" },
+        "workflowRef": { "$ref": "#/$defs/nullableString" },
+        "workflowSha": { "$ref": "#/$defs/nullableString" },
+        "runId": { "$ref": "#/$defs/nullableString" },
+        "runNumber": { "$ref": "#/$defs/nullableString" },
+        "jobId": { "type": "string", "minLength": 1 },
+        "attempt": { "type": "string", "minLength": 1 },
+        "runUri": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "artefact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image", "helm"],
+      "properties": {
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["registry", "repository", "tag", "digest"],
+          "properties": {
+            "registry": { "$ref": "#/$defs/nullableString" },
+            "repository": { "$ref": "#/$defs/nullableString" },
+            "tag": { "$ref": "#/$defs/nullableString" },
+            "digest": { "$ref": "#/$defs/nullableString" }
+          }
+        },
+        "helm": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["chartName", "chartVersion", "releaseName", "releaseRevision"],
+          "properties": {
+            "chartName": { "$ref": "#/$defs/nullableString" },
+            "chartVersion": { "$ref": "#/$defs/nullableString" },
+            "releaseName": { "$ref": "#/$defs/nullableString" },
+            "releaseRevision": { "$ref": "#/$defs/nullableString" }
+          }
+        }
+      }
+    },
+    "configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["engine", "agave"],
+      "properties": {
+        "engine": { "enum": ["agave", "tequila"] },
+        "agave": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "requestedSyncMode", "effectiveSyncMode", "syncPolicyReason", "refreshInterval", "providerRecordCount", "mappedFieldCount", "templateCount", "contractValidation"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "requestedSyncMode": { "$ref": "#/$defs/nullableString" },
+            "effectiveSyncMode": { "$ref": "#/$defs/nullableString" },
+            "syncPolicyReason": { "$ref": "#/$defs/nullableString" },
+            "refreshInterval": { "$ref": "#/$defs/nullableString" },
+            "providerRecordCount": { "$ref": "#/$defs/nullableNonNegativeInteger" },
+            "mappedFieldCount": { "$ref": "#/$defs/nullableNonNegativeInteger" },
+            "templateCount": { "$ref": "#/$defs/nullableNonNegativeInteger" },
+            "contractValidation": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["result", "reportApiVersion", "valuesRedacted", "providerRecordCount", "mappedFieldCount", "templateCount", "validator"],
+              "properties": {
+                "result": { "$ref": "#/$defs/validationOutcome" },
+                "reportApiVersion": { "$ref": "#/$defs/nullableString" },
+                "valuesRedacted": { "$ref": "#/$defs/nullableBoolean" },
+                "providerRecordCount": { "$ref": "#/$defs/nullableNonNegativeInteger" },
+                "mappedFieldCount": { "$ref": "#/$defs/nullableNonNegativeInteger" },
+                "templateCount": { "$ref": "#/$defs/nullableNonNegativeInteger" },
+                "validator": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["name", "feed", "package", "pinnedVersion", "executedVersion", "executableSha256", "checksumVerified", "verificationResult"],
+                  "properties": {
+                    "name": { "const": "agave-cli" },
+                    "feed": { "const": "Agave/AgavePublicFeed" },
+                    "package": { "const": "agave-cli" },
+                    "pinnedVersion": { "$ref": "#/$defs/nullableAgaveVersion" },
+                    "executedVersion": { "$ref": "#/$defs/nullableAgaveVersion" },
+                    "executableSha256": { "$ref": "#/$defs/nullableSha256" },
+                    "checksumVerified": { "$ref": "#/$defs/nullableBoolean" },
+                    "verificationResult": { "$ref": "#/$defs/validationOutcome" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deploymentStartedAt", "deploymentCompletedAt", "deploymentDurationMs", "helmStartedAt", "helmCompletedAt", "helmDurationMs"],
+      "properties": {
+        "deploymentStartedAt": { "$ref": "#/$defs/nullableDateTime" },
+        "deploymentCompletedAt": { "type": "string", "format": "date-time" },
+        "deploymentDurationMs": { "$ref": "#/$defs/nullableNonNegativeInteger" },
+        "helmStartedAt": { "$ref": "#/$defs/nullableDateTime" },
+        "helmCompletedAt": { "$ref": "#/$defs/nullableDateTime" },
+        "helmDurationMs": { "$ref": "#/$defs/nullableNonNegativeInteger" }
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["overall", "mechanism", "failureStage", "helm", "reconciliation", "rollout", "recovery", "credentialCleanup", "reportEmission", "failure"],
+      "properties": {
+        "overall": { "enum": ["succeeded", "succeeded_with_issues", "failed", "cancelled", "skipped", "unknown"] },
+        "mechanism": { "enum": ["helm", "application_manifests", "unknown"] },
+        "failureStage": { "enum": ["completed", "cancelled", "application_manifest_deployment", "pre_deployment", "deployment_transaction"] },
+        "helm": { "$ref": "#/$defs/componentOutcome" },
+        "reconciliation": { "$ref": "#/$defs/componentOutcome" },
+        "rollout": { "$ref": "#/$defs/componentOutcome" },
+        "recovery": { "enum": ["not_required", "succeeded", "failed", "unknown"] },
+        "credentialCleanup": { "$ref": "#/$defs/componentOutcome" },
+        "reportEmission": { "const": "succeeded" },
+        "failure": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["reasonCode", "message", "retryable"],
+              "properties": {
+                "reasonCode": { "type": "string", "minLength": 1 },
+                "message": { "type": "null" },
+                "retryable": { "type": "null" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pipelineRunUri", "platformImplementation", "diagnosticCommands"],
+      "properties": {
+        "pipelineRunUri": { "$ref": "#/$defs/nullableString" },
+        "platformImplementation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repository", "workflowRef", "workflowSha"],
+          "properties": {
+            "repository": { "$ref": "#/$defs/nullableString" },
+            "workflowRef": { "$ref": "#/$defs/nullableString" },
+            "workflowSha": { "$ref": "#/$defs/nullableString" }
+          }
+        },
+        "diagnosticCommands": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    },
+    "dataQuality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed", "inferred", "unavailable", "limitations"],
+      "properties": {
+        "observed": { "$ref": "#/$defs/stringArray" },
+        "inferred": { "$ref": "#/$defs/stringArray" },
+        "unavailable": { "$ref": "#/$defs/stringArray" },
+        "limitations": { "$ref": "#/$defs/stringArray" }
+      }
+    }
+  },
+  "$defs": {
+    "nullableString": { "type": ["string", "null"] },
+    "nullableBoolean": { "type": ["boolean", "null"] },
+    "nullableAgaveVersion": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "pattern": "^0\\.[0-9]{8}\\.[0-9]+$" }
+      ]
+    },
+    "nullableSha256": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      ]
+    },
+    "nullableDateTime": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "format": "date-time" }
+      ]
+    },
+    "nullableNonNegativeInteger": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "integer", "minimum": 0 }
+      ]
+    },
+    "componentOutcome": {
+      "enum": ["succeeded", "failed", "not_started", "not_applicable", "unknown"]
+    },
+    "validationOutcome": {
+      "enum": ["succeeded", "failed", "not_run", "not_applicable", "unknown"]
+    },
+    "stringArray": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    }
+  }
+}

@@ -1,0 +1,253 @@
+# Default values for Clearent applications.
+# Pipeline and application-specific values may override these settings.
+
+# Conventional Helm naming fields retained for values-file compatibility.
+# clearent-app resources remain release-named because changing this historical
+# behaviour would rename workloads and immutable selectors during upgrades.
+nameOverride: ""
+fullnameOverride: ""
+
+# Optional project identifier used by platform labels.
+# Defaults to the Helm release name when empty.
+project_name: ""
+
+global:
+  # Exact canonical environment identity injected by the deployment pipeline.
+  # It is used unchanged for configuration and platform binding. The platform
+  # never adds, removes or aliases a prefix: dev and clearent-dev are distinct.
+  # Current Clearent Azure DevOps parity uses values such as clearent-dev.
+  environment: ""
+
+# Number of desired application pods.
+replicas: 1
+
+# Application type. This must be supplied by the deployment pipeline or caller.
+# Valid values:
+# - web_service
+# - web_app
+# - service
+# - background_service
+# - cron_job
+# - cronjob
+applicationType: ""
+
+# Application framework. This must be supplied by the deployment pipeline or caller.
+# Valid values:
+# - dotnet
+# - java
+# - angular
+# - vue
+# - py
+applicationFramework: ""
+
+# Application resource profile.
+# Valid values:
+# - small
+# - medium
+# - large
+# - x-large
+applicationSize: small
+
+# Service classification.
+# Valid values:
+# - class_a_plus
+# - class_a
+# - class_b
+# - class_c
+serviceClassification: "undefined"
+
+# Legacy compatibility value containing the same exact environment identity.
+# global.environment takes precedence for migrated deployments; when both are
+# supplied they must match, rather than being treated as aliases.
+configEnvironment: ""
+
+# CronJob schedule, when applicationType is cron_job or cronjob.
+cronJobSchedule: ""
+
+# Deploy the CronJob in a suspended state.
+cronJobSuspended: false
+
+# Maximum permitted delay between the scheduled time and Job creation.
+# Leave null to use the Kubernetes default behaviour.
+startingDeadlineSeconds: null
+
+# Java runtime options.
+javaOptions: ""
+
+# Java framework-specific settings.
+java:
+  # Spring configuration template filename under config/templates/.
+  #
+  # Older Java/Spring applications may not discover configuration files
+  # correctly through Kubernetes' atomic-writer symlink layout. The chart
+  # mounts this file directly using subPath.
+  springConfigFile: "application.properties"
+
+# Application health-check endpoint.
+healthCheck:
+  port: 80
+  path: "/health"
+
+# Application container image. repository and tag are required at render time.
+image:
+  registry: xplorcrsharedregistry.azurecr.io
+  repository: ""
+  tag: ""
+
+# Legacy Tequila image version.
+tequilaImageTag: "stable"
+
+ingress:
+  subdomain: "clearent.dev"
+  domain: "clearent.net"
+  path: ""
+  path2: ""
+  behindEdgeService: true
+  tls: false
+  configSnippet: ""
+  sslCertSecret: ""
+  backendTls: false
+
+pipeline:
+  # Platform-owned GitHub Actions identity. Application-owned values files
+  # must not set or override these fields.
+  provider: github_actions
+  name: ""
+  runUri: ""
+  # Platform-generated UUID shared by both phases of one Helm transaction.
+  deploymentId: ""
+  # Full GitHub repository identity in owner/name form.
+  repository: ""
+  repositoryOwner: ""
+  # Exact protected GitHub Environment selected by the reusable deployment
+  # workflow. It must match the effective configuration identity byte-for-byte.
+  environment: ""
+
+siteStatus: inactive
+
+# YAML object encoded as a string and supplied by the pipeline. Keys must be
+# valid environment-variable names and values must be non-null scalars.
+#
+# Example:
+# extraEnvVars: |
+#   FEATURE_FLAG: enabled
+#   LOG_LEVEL: Information
+extraEnvVars: "{}"
+
+# Kerberos integration.
+kerberos:
+  enabled: false
+
+  # Existing store used by legacy deployments.
+  # Agave deployments use agave-store-<environment>, where <environment> is the
+  # unchanged exact identity (for example, agave-store-clearent-dev).
+  secretStoreName: "ksm-secret-store"
+
+  # Optional provider record name.
+  # Defaults to <application-name>-krb-creds. Custom names may contain only
+  # letters, numbers, dots, underscores and hyphens.
+  recordName: ""
+
+# SMB PVC mounts encoded as a YAML array string. Volume names must be valid
+# Kubernetes DNS labels and container paths must be unique absolute paths that
+# do not contain colons or collide with mounts owned by the selected framework.
+#
+# Example:
+# smb:
+#   mounts: |
+#     - volume_name: shared-files
+#       path_in_container: /mnt/shared
+#       path_in_volume: application
+smb:
+  mounts: "[]"
+
+# =========================================================================
+# POD SECURITY CONTEXT
+# =========================================================================
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+
+  seccompProfile:
+    type: RuntimeDefault
+
+  # Retained for compatibility with non-root application containers that
+  # currently bind directly to port 80.
+  sysctls:
+    - name: net.ipv4.ip_unprivileged_port_start
+      value: "80"
+
+# =========================================================================
+# AGAVE FEATURE CONTROL
+# =========================================================================
+
+agave:
+  # Platform-owned circuit breaker.
+  #
+  # false:
+  #   Preserve the existing Tequila runtime path.
+  #
+  # true:
+  #   Enable the Agave External Secrets and configuration projection path.
+  enabled: false
+
+  # Platform-owned two-phase rollout gate. Closed pauses Deployments and
+  # suspends CronJobs until fresh ESO and target Secret state is proven.
+  rolloutGate: closed
+
+# =========================================================================
+# AGAVE SYNCHRONISATION POLICY
+# =========================================================================
+
+platformConfig:
+  # Requested synchronisation mode.
+  #
+  # governed:
+  #   Refresh only when the ExternalSecret resource changes through an
+  #   authorised deployment.
+  #
+  # continuous:
+  #   Periodically reconcile with the upstream provider.
+  #
+  # Platform policy may override this mode according to the terminal lifecycle
+  # tier (dev, tst, int, qa, prd or prod). It does not rewrite the environment
+  # identity, and unrecognised terminal tiers default to governed mode.
+  syncMode: governed
+
+  # Approved values for continuous mode:
+  # - 6h
+  # - 12h
+  refreshInterval: "6h"
+
+# =========================================================================
+# AGAVE DECLARATIVE APPLICATION CONTRACT
+# =========================================================================
+
+# The contract supports one private application source plus explicitly
+# platform-published shared-* sourceRefs. Each sourceRef is the exact,
+# case-sensitive Keeper record title. Its allow-lists are supplied only by the
+# platform compiler; applications cannot declare them here.
+#
+# Limits:
+# - no more than 10 sources;
+# - no more than 1 private application source;
+# - no more than 50 total field mappings;
+# - target keys must be unique across all records.
+#
+# A binary mapping uses `<target filename>: { isBinary: true }`. Its target
+# filename is also the exact, case-sensitive Keeper attachment name. For a
+# shared source, the platform catalogue must include that name in its
+# `attachments` allow-list.
+secretsContract: {}
+
+# Compiler-generated selection for shared sourceRefs. This is catalogue
+# provenance and defensive Helm input validation; it is not a runtime signature
+# or admission control. Application contracts cannot set this object.
+agaveSharedSources:
+  catalogueApiVersion: ""
+  catalogueDigest: ""
+  provider: ""
+  organisation: ""
+  sharedSources: {}

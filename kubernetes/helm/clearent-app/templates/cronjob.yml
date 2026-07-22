@@ -1,0 +1,102 @@
+{{- if eq (include "common.isCronJob" .) "true" }}
+{{- $agaveEnabled := eq (include "common.agaveEnabled" .) "true" -}}
+{{- $agave := .Values.agave | default dict -}}
+{{- $rolloutGate := get $agave "rolloutGate" | default "closed" | toString | lower -}}
+{{- $kerberos := .Values.kerberos | default dict -}}
+{{- $kerberosEnabled := get $kerberos "enabled" | default false -}}
+{{- $cronPodSecurityContext := omit (.Values.podSecurityContext | default dict) "sysctls" -}}
+{{- if and $agaveEnabled (not (has $rolloutGate (list "closed" "open"))) -}}
+{{- fail (printf "Invalid agave.rolloutGate %q. Expected closed or open." $rolloutGate) -}}
+{{- end -}}
+
+apiVersion: batch/v1
+kind: CronJob
+
+metadata:
+  name: {{ include "app.cronJobName" . | quote }}
+  namespace: {{ include "app.namespace" . | quote }}
+  labels:
+    {{- include "common.labels" . | nindent 4 }}
+  annotations:
+    {{- include "common.annotations" . | nindent 4 }}
+{{ if $agaveEnabled }}
+    clearent.xplor/agave-rollout-gate: {{ $rolloutGate | quote }}
+{{ end }}
+
+spec:
+  suspend: {{ ternary true (default false .Values.cronJobSuspended) (and $agaveEnabled (eq $rolloutGate "closed")) }}
+  schedule: {{ required "cronJobSchedule is required for cron jobs" .Values.cronJobSchedule | quote }}
+  concurrencyPolicy: Forbid
+
+  {{- if ne .Values.startingDeadlineSeconds nil }}
+  startingDeadlineSeconds: {{ .Values.startingDeadlineSeconds }}
+  {{- end }}
+
+  jobTemplate:
+    metadata:
+      labels:
+        {{- include "common.labels" . | nindent 8 }}
+      annotations:
+        {{- include "common.annotations" . | nindent 8 }}
+
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "common.labels" . | nindent 12 }}
+          annotations:
+            {{- include "common.annotations" . | nindent 12 }}
+            sidecar.istio.io/inject: "false"
+
+        spec:
+          restartPolicy: Never
+
+          securityContext:
+            {{- toYaml $cronPodSecurityContext | nindent 12 }}
+
+          imagePullSecrets:
+            - name: acr-pull
+
+          containers:
+            - name: {{ include "app.name" . | quote }}
+              image: {{ printf "%s/%s:%s" .Values.image.registry .Values.image.repository .Values.image.tag | quote }}
+
+              {{- include "common.securityContext" . | nindent 14 }}
+
+              {{- /*
+              common.envVars renders the complete environment block:
+              - framework-specific variables;
+              - extraEnvVars;
+              - Kerberos variables;
+              - Agave text variables.
+              */}}
+              {{- include "common.envVars" . | nindent 14 }}
+
+              volumeMounts:
+                {{- include "common.volumeMounts" . | nindent 16 }}
+
+              {{- /*
+              Retain the existing CronJob resource profile to avoid changing
+              scheduling behaviour during the Agave migration.
+              */}}
+              resources:
+                requests:
+                  cpu: 25m
+                  memory: 128Mi
+                limits:
+                  cpu: 2000m
+                  memory: 4096Mi
+
+          {{- /*
+          Legacy mode requires the Tequila framework init container.
+          Agave normally does not, but Kerberos still requires krb-init.
+          */}}
+          {{- if or (not $agaveEnabled) $kerberosEnabled }}
+          initContainers:
+            {{- include "common.initContainers" . | nindent 12 }}
+          {{- end }}
+
+          volumes:
+            {{- include "common.volumes" . | nindent 12 }}
+
+{{- end }}

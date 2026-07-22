@@ -1,0 +1,190 @@
+name: Clearent Maven package publication
+
+on:
+  workflow_call:
+    inputs:
+      package_environment:
+        description: Protected GitHub environment containing PACKAGE_WRITE_TOKEN.
+        required: false
+        type: string
+        default: package-publish
+      java_version:
+        description: JDK version used to build and publish the package.
+        required: false
+        type: string
+        default: "13"
+      java_distribution:
+        description: JDK distribution used to build and publish the package.
+        required: false
+        type: string
+        default: temurin
+      pom_file:
+        description: Maven POM relative to the package repository root.
+        required: false
+        type: string
+        default: pom.xml
+      goals:
+        description: Maven publication goals.
+        required: false
+        type: string
+        default: clean deploy
+      additional_arguments:
+        description: Additional Maven arguments, one complete argument per line.
+        required: false
+        type: string
+        default: ""
+      repository_url:
+        description: Maven dependency and publication repository.
+        required: false
+        type: string
+        default: https://pkgs.dev.azure.com/xplortechnologies/_packaging/xplortechnologies/maven/v1
+      repository_id:
+        description: Maven server and repository identifier.
+        required: false
+        type: string
+        default: xplortechnologies
+      repository_username:
+        description: Maven repository username paired with the protected write token.
+        required: false
+        type: string
+        default: xplortechnologies
+    secrets:
+      CLEARENT_PLATFORM_READ_TOKEN:
+        description: Read token used to retrieve the pinned central implementation.
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Validate Maven publication request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: none
+      id-token: write
+    outputs:
+      workflow_ref: ${{ steps.workflow-identity.outputs.workflow-ref }}
+      workflow_sha: ${{ steps.workflow-identity.outputs.workflow-sha }}
+    steps:
+      - name: Validate trusted caller
+        shell: pwsh
+        env:
+          CLEARENT_PLATFORM_READ_TOKEN: ${{ secrets.CLEARENT_PLATFORM_READ_TOKEN }}
+          CLEARENT_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          CLEARENT_PACKAGE_ENVIRONMENT: ${{ inputs.package_environment }}
+        run: |
+          if ($env:CLEARENT_REPOSITORY_OWNER -cne "xplor-pay") {
+            throw "Clearent package publication may be called only by repositories owned by xplor-pay."
+          }
+          if ([string]::IsNullOrWhiteSpace($env:CLEARENT_PLATFORM_READ_TOKEN)) {
+            throw "CLEARENT_PLATFORM_READ_TOKEN is required."
+          }
+          if ($env:CLEARENT_PACKAGE_ENVIRONMENT -cne "package-publish") {
+            throw "package_environment must be the protected 'package-publish' environment."
+          }
+
+      - name: Resolve called workflow identity
+        id: workflow-identity
+        shell: pwsh
+        env:
+          CLEARENT_EXPECTED_WORKFLOW_PATH: .github/workflows/clearent-maven-package-publish-reusable.yml
+        run: |
+          $ErrorActionPreference = "Stop"
+          $audience = "xplor-pay/github-actions"
+          if (
+            [string]::IsNullOrWhiteSpace($env:ACTIONS_ID_TOKEN_REQUEST_URL) -or
+            [string]::IsNullOrWhiteSpace($env:ACTIONS_ID_TOKEN_REQUEST_TOKEN)
+          ) {
+            throw "GitHub OIDC is required to resolve the called workflow revision."
+          }
+          $separator = if ($env:ACTIONS_ID_TOKEN_REQUEST_URL.Contains("?")) { "&" } else { "?" }
+          $requestUri = "{0}{1}audience={2}" -f
+            $env:ACTIONS_ID_TOKEN_REQUEST_URL,
+            $separator,
+            [Uri]::EscapeDataString($audience)
+          $response = Invoke-RestMethod -Uri $requestUri -Headers @{
+            Authorization = "bearer $($env:ACTIONS_ID_TOKEN_REQUEST_TOKEN)"
+          }
+          $segments = @($response.value.Split("."))
+          if ($segments.Count -ne 3) {
+            throw "GitHub returned an invalid OIDC token."
+          }
+          $payloadText = $segments[1].Replace("-", "+").Replace("_", "/")
+          switch ($payloadText.Length % 4) {
+            0 { }
+            2 { $payloadText += "==" }
+            3 { $payloadText += "=" }
+            default { throw "GitHub returned an invalid OIDC payload." }
+          }
+          $payload = [Text.Encoding]::UTF8.GetString(
+            [Convert]::FromBase64String($payloadText)
+          ) | ConvertFrom-Json
+          $expectedPrefix = "xplor-pay/github-actions/$($env:CLEARENT_EXPECTED_WORKFLOW_PATH)@"
+          $workflowRef = [string]$payload.job_workflow_ref
+          $workflowSha = ([string]$payload.job_workflow_sha).ToLowerInvariant()
+          $calledReference = if ($workflowRef.StartsWith($expectedPrefix, [StringComparison]::Ordinal)) {
+            $workflowRef.Substring($expectedPrefix.Length)
+          } else {
+            ""
+          }
+          if (
+            $payload.iss -cne "https://token.actions.githubusercontent.com" -or
+            @($payload.aud) -cnotcontains $audience -or
+            $workflowSha -cnotmatch "^[0-9a-f]{40}$" -or
+            $calledReference -cne $workflowSha -or
+            [long]$payload.exp -le [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+          ) {
+            throw "The reusable workflow identity is invalid or is not pinned to a full commit SHA."
+          }
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "workflow-ref=$workflowRef"
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "workflow-sha=$workflowSha"
+
+  publish:
+    name: Publish Maven package
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.package_environment }}
+    steps:
+      - name: Validate protected publication credential
+        shell: pwsh
+        env:
+          CLEARENT_PACKAGE_WRITE_TOKEN: ${{ secrets.PACKAGE_WRITE_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CLEARENT_PACKAGE_WRITE_TOKEN)) {
+            throw "The selected protected environment must provide PACKAGE_WRITE_TOKEN."
+          }
+
+      - name: Check out package revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          path: application
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Check out pinned Maven publication implementation
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: xplor-pay/github-actions
+          ref: ${{ needs.preflight.outputs.workflow_sha }}
+          token: ${{ secrets.CLEARENT_PLATFORM_READ_TOKEN }}
+          path: platform
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Publish package
+        uses: ./platform/.github/actions/java/publish
+        env:
+          CLEARENT_PACKAGE_WRITE_TOKEN: ${{ secrets.PACKAGE_WRITE_TOKEN }}
+        with:
+          application-directory: ${{ github.workspace }}/application
+          java-version: ${{ inputs.java_version }}
+          java-distribution: ${{ inputs.java_distribution }}
+          pom-file: ${{ inputs.pom_file }}
+          goals: ${{ inputs.goals }}
+          additional-arguments: ${{ inputs.additional_arguments }}
+          repository-url: ${{ inputs.repository_url }}
+          repository-id: ${{ inputs.repository_id }}
+          repository-username: ${{ inputs.repository_username }}

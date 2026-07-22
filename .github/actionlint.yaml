@@ -1,0 +1,19 @@
+self-hosted-runner:
+  labels: []
+
+config-variables: null
+
+# These credentials are supplied by the named job-level GitHub environments.
+# Reusable-workflow secret declarations intentionally omit them because they
+# are not caller inputs; environment configuration remains their source.
+paths:
+  .github/workflows/clearent-kubernetes-deploy-reusable.yml:
+    ignore:
+      - 'property "agave_azure_devops_pat" is not defined'
+      - 'property "clearent_kubeconfig_b64" is not defined'
+  .github/workflows/clearent-maven-package-publish-reusable.yml:
+    ignore:
+      - 'property "package_write_token" is not defined'
+  .github/workflows/clearent-npm-package-publish-reusable.yml:
+    ignore:
+      - 'property "package_write_token" is not defined'

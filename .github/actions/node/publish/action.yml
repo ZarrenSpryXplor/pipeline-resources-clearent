@@ -1,0 +1,79 @@
+name: Publish npm package
+description: Restores and publishes an npm package using temporary registry credentials.
+
+inputs:
+  application-directory:
+    description: Checked-out package repository directory.
+    required: true
+  node-version:
+    description: Node.js version accepted by actions/setup-node.
+    required: false
+    default: "20"
+  lock-file:
+    description: npm lock file relative to the package directory.
+    required: false
+    default: package-lock.json
+  registry-url:
+    description: npm publication registry.
+    required: false
+    default: https://pkgs.dev.azure.com/xplortechnologies/_packaging/xplortechnologies/npm/registry/
+  registry-username:
+    description: npm registry username.
+    required: false
+    default: xplortechnologies
+  registry-auth-mode:
+    description: basic for Azure Artifacts PATs or token for bearer-token registries.
+    required: false
+    default: basic
+  access:
+    description: npm publication access, restricted or public.
+    required: false
+    default: restricted
+  tag:
+    description: npm distribution tag.
+    required: false
+    default: latest
+
+runs:
+  using: composite
+  steps:
+    - name: Validate npm publication inputs
+      shell: bash
+      env:
+        CLEARENT_APPLICATION_DIRECTORY: ${{ inputs.application-directory }}
+        CLEARENT_NODE_LOCK_FILE: ${{ inputs.lock-file }}
+        CLEARENT_NPM_REGISTRY_URL: ${{ inputs.registry-url }}
+        CLEARENT_NPM_ACCESS: ${{ inputs.access }}
+        CLEARENT_NPM_TAG: ${{ inputs.tag }}
+      run: bash "$GITHUB_ACTION_PATH/publish.sh" validate
+
+    - name: Set up Node.js
+      uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+        cache-dependency-path: ${{ inputs.application-directory }}/${{ inputs.lock-file }}
+
+    - name: Configure npm publication repository
+      shell: pwsh
+      env:
+        CLEARENT_NPM_REGISTRY_URL: ${{ inputs.registry-url }}
+        CLEARENT_NPM_REGISTRY_USERNAME: ${{ inputs.registry-username }}
+        CLEARENT_NPM_AUTH_MODE: ${{ inputs.registry-auth-mode }}
+        CLEARENT_PACKAGE_READ_TOKEN: ${{ env.CLEARENT_PACKAGE_WRITE_TOKEN }}
+      run: '& "$env:GITHUB_ACTION_PATH/../Configure-Npm.ps1"'
+
+    - name: Publish npm package
+      shell: bash
+      env:
+        CLEARENT_APPLICATION_DIRECTORY: ${{ inputs.application-directory }}
+        CLEARENT_NODE_LOCK_FILE: ${{ inputs.lock-file }}
+        CLEARENT_NPM_REGISTRY_URL: ${{ inputs.registry-url }}
+        CLEARENT_NPM_ACCESS: ${{ inputs.access }}
+        CLEARENT_NPM_TAG: ${{ inputs.tag }}
+      run: bash "$GITHUB_ACTION_PATH/publish.sh" publish
+
+    - name: Remove temporary npm credentials
+      if: ${{ always() }}
+      shell: pwsh
+      run: '& "$env:GITHUB_ACTION_PATH/../Configure-Npm.ps1" -Cleanup'

@@ -1,0 +1,412 @@
+name: Clearent Kubernetes deployment
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: Exact Clearent environment identity, such as dev or clearent-dev.
+        required: true
+        type: string
+      application_name:
+        description: Kubernetes release and workload name.
+        required: true
+        type: string
+      application_type:
+        description: web_service, web_app, service, background_service, cron_job or cronjob.
+        required: true
+        type: string
+      application_framework:
+        description: dotnet, java, angular, vue or py.
+        required: true
+        type: string
+      kubernetes_namespace:
+        description: Target Kubernetes namespace.
+        required: true
+        type: string
+      image_tag:
+        description: ACR image tag to deploy.
+        required: true
+        type: string
+      replica_count:
+        description: Desired replica count.
+        required: false
+        default: 1
+        type: number
+      application_size:
+        description: small, medium, large or x-large.
+        required: false
+        default: small
+        type: string
+      service_classification:
+        description: Clearent service classification.
+        required: false
+        default: undefined
+        type: string
+      health_check_path:
+        description: Optional health-check path.
+        required: false
+        default: ""
+        type: string
+      health_check_port:
+        description: Optional health-check port.
+        required: false
+        default: ""
+        type: string
+      cron_job_schedule:
+        description: CronJob schedule when the workload is a CronJob.
+        required: false
+        default: ""
+        type: string
+      cron_job_suspended:
+        description: Whether a CronJob is suspended.
+        required: false
+        default: false
+        type: boolean
+      java_options:
+        description: JVM options for Java workloads.
+        required: false
+        default: -Xmx512m
+        type: string
+      ingress_subdomain:
+        description: Optional override; defaults by framework and environment to the legacy Clearent route.
+        required: false
+        default: ""
+        type: string
+      ingress_domain:
+        description: Clearent ingress domain.
+        required: false
+        default: clearent.net
+        type: string
+      ingress_path:
+        description: Primary ingress path.
+        required: false
+        default: ""
+        type: string
+      ingress_path_2:
+        description: Secondary ingress path.
+        required: false
+        default: ""
+        type: string
+      ingress_tls:
+        description: Enable ingress TLS.
+        required: false
+        default: true
+        type: boolean
+      backend_tls:
+        description: Enable TLS from ingress to the workload.
+        required: false
+        default: false
+        type: boolean
+      ingress_cert_secret:
+        description: Ingress certificate Secret name.
+        required: false
+        default: clearent-wildcard
+        type: string
+      ingress_config_snippet:
+        description: Optional ingress configuration snippet.
+        required: false
+        default: ""
+        type: string
+      behind_edge_service:
+        description: Whether the application is behind the edge service.
+        required: false
+        default: true
+        type: boolean
+      site_status:
+        description: Site status label.
+        required: false
+        default: inactive
+        type: string
+      extra_env_vars:
+        description: JSON object containing non-secret extra environment variables.
+        required: false
+        default: "{}"
+        type: string
+      kerberos_enabled:
+        description: Enable the chart's Kerberos integration.
+        required: false
+        default: false
+        type: boolean
+      smb_mounts:
+        description: JSON array containing SMB mount definitions.
+        required: false
+        default: "[]"
+        type: string
+      enable_agave:
+        description: Enable Agave contract processing and guarded reconciliation.
+        required: false
+        default: false
+        type: boolean
+      skip_kubernetes_tls_verify:
+        description: Disable Kubernetes TLS verification in authorised dev/tst only.
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      CLEARENT_PLATFORM_READ_TOKEN:
+        description: Fine-grained token with contents:read on xplor-pay/github-actions.
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Validate trusted deployment routing
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: none
+      id-token: write
+    outputs:
+      workflow_ref: ${{ steps.workflow-identity.outputs.workflow-ref }}
+      workflow_sha: ${{ steps.workflow-identity.outputs.workflow-sha }}
+    steps:
+      - name: Validate caller inputs
+        shell: pwsh
+        env:
+          CLEARENT_ENVIRONMENT: ${{ inputs.environment }}
+          CLEARENT_REPOSITORY: ${{ github.repository }}
+          CLEARENT_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          CLEARENT_APPLICATION_NAME: ${{ inputs.application_name }}
+          CLEARENT_APPLICATION_TYPE: ${{ inputs.application_type }}
+          CLEARENT_APPLICATION_FRAMEWORK: ${{ inputs.application_framework }}
+          CLEARENT_NAMESPACE: ${{ inputs.kubernetes_namespace }}
+          CLEARENT_IMAGE_TAG: ${{ inputs.image_tag }}
+          CLEARENT_REPLICA_COUNT: ${{ inputs.replica_count }}
+          CLEARENT_SKIP_TLS_VERIFY: ${{ inputs.skip_kubernetes_tls_verify }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $environment = $env:CLEARENT_ENVIRONMENT.Trim().ToLowerInvariant()
+          if ($env:CLEARENT_REPOSITORY_OWNER -cne 'xplor-pay') {
+            throw "Clearent deployments may be called only by repositories owned by xplor-pay."
+          }
+          $repositoryParts = @($env:CLEARENT_REPOSITORY.Split('/', 2))
+          if (
+            $repositoryParts.Count -ne 2 -or
+            $repositoryParts[1] -cne $env:CLEARENT_APPLICATION_NAME
+          ) {
+            throw "application_name must exactly match the calling repository name."
+          }
+          if ($env:CLEARENT_ENVIRONMENT -cne $environment) {
+            throw "environment must use its canonical lowercase spelling without surrounding whitespace."
+          }
+          if ($environment -cnotmatch '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$') {
+            throw "environment must be a valid canonical DNS label."
+          }
+          $lifecycleTier = ($environment -split '-')[-1]
+          if ($env:CLEARENT_APPLICATION_NAME -cnotmatch '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$') {
+            throw "application_name must be a valid DNS label."
+          }
+          if ($env:CLEARENT_NAMESPACE -cnotmatch '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$') {
+            throw "kubernetes_namespace must be a valid DNS label."
+          }
+          if ($env:CLEARENT_APPLICATION_TYPE -cnotin @(
+            "web_service", "web_app", "service", "background_service",
+            "cron_job", "cronjob"
+          )) {
+            throw "Unsupported application_type '$($env:CLEARENT_APPLICATION_TYPE)'."
+          }
+          if ($env:CLEARENT_APPLICATION_FRAMEWORK -cnotin @(
+            "dotnet", "java", "angular", "vue", "py"
+          )) {
+            throw "Unsupported application_framework '$($env:CLEARENT_APPLICATION_FRAMEWORK)'."
+          }
+          if ($env:CLEARENT_IMAGE_TAG -cnotmatch '^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$') {
+            throw "image_tag is not a valid OCI tag."
+          }
+          if (
+            $env:CLEARENT_IMAGE_TAG -ieq 'latest' -and
+            $lifecycleTier -cnotin @('dev', 'tst', 'int', 'qa')
+          ) {
+            throw "The mutable image tag 'latest' is permitted only for a recognised non-production lifecycle tier."
+          }
+          $replicas = 0
+          if (
+            -not [int]::TryParse($env:CLEARENT_REPLICA_COUNT, [ref]$replicas) -or
+            $replicas -lt 0 -or
+            $replicas -gt 100
+          ) {
+            throw "replica_count must be between 0 and 100."
+          }
+          $skipTls = [Convert]::ToBoolean($env:CLEARENT_SKIP_TLS_VERIFY)
+          if ($skipTls -and $lifecycleTier -cnotin @('dev', 'tst')) {
+            throw "Kubernetes TLS verification may be disabled only for the dev or tst lifecycle tier."
+          }
+
+      - name: Resolve called workflow identity
+        id: workflow-identity
+        shell: pwsh
+        env:
+          CLEARENT_EXPECTED_WORKFLOW_PATH: .github/workflows/clearent-kubernetes-deploy-reusable.yml
+        run: |
+          $ErrorActionPreference = "Stop"
+          $audience = "xplor-pay/github-actions"
+          if (
+            [string]::IsNullOrWhiteSpace($env:ACTIONS_ID_TOKEN_REQUEST_URL) -or
+            [string]::IsNullOrWhiteSpace($env:ACTIONS_ID_TOKEN_REQUEST_TOKEN)
+          ) {
+            throw "GitHub OIDC is required to resolve the called workflow revision."
+          }
+          $separator = if ($env:ACTIONS_ID_TOKEN_REQUEST_URL.Contains("?")) { "&" } else { "?" }
+          $requestUri = "{0}{1}audience={2}" -f
+            $env:ACTIONS_ID_TOKEN_REQUEST_URL,
+            $separator,
+            [Uri]::EscapeDataString($audience)
+          $response = Invoke-RestMethod -Uri $requestUri -Headers @{
+            Authorization = "bearer $($env:ACTIONS_ID_TOKEN_REQUEST_TOKEN)"
+          }
+          $segments = @($response.value.Split("."))
+          if ($segments.Count -ne 3) {
+            throw "GitHub returned an invalid OIDC token."
+          }
+          $payloadText = $segments[1].Replace("-", "+").Replace("_", "/")
+          switch ($payloadText.Length % 4) {
+            0 { }
+            2 { $payloadText += "==" }
+            3 { $payloadText += "=" }
+            default { throw "GitHub returned an invalid OIDC payload." }
+          }
+          $payload = [Text.Encoding]::UTF8.GetString(
+            [Convert]::FromBase64String($payloadText)
+          ) | ConvertFrom-Json
+          $expectedPrefix = "xplor-pay/github-actions/$($env:CLEARENT_EXPECTED_WORKFLOW_PATH)@"
+          $workflowRef = [string]$payload.job_workflow_ref
+          $workflowSha = ([string]$payload.job_workflow_sha).ToLowerInvariant()
+          $calledReference = if ($workflowRef.StartsWith($expectedPrefix, [StringComparison]::Ordinal)) {
+            $workflowRef.Substring($expectedPrefix.Length)
+          } else {
+            ""
+          }
+          if (
+            $payload.iss -cne "https://token.actions.githubusercontent.com" -or
+            @($payload.aud) -cnotcontains $audience -or
+            $workflowSha -cnotmatch "^[0-9a-f]{40}$" -or
+            $calledReference -cne $workflowSha -or
+            [long]$payload.exp -le [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+          ) {
+            throw "The reusable workflow identity is invalid or is not pinned to a full commit SHA."
+          }
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "workflow-ref=$workflowRef"
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "workflow-sha=$workflowSha"
+
+  deploy:
+    name: Deploy ${{ inputs.application_name }} to ${{ inputs.environment }}
+    needs: preflight
+    # ARC runner scale sets expose one routing label: the scale-set name. Keep
+    # it central and immutable so callers cannot redirect this privileged job.
+    runs-on: clearent-kubernetes
+    # The guarded transaction may consume its Helm, ESO, rollout and recovery
+    # windows sequentially. Leave enough headroom for final credential cleanup
+    # and report emission on a slow failure path.
+    timeout-minutes: 90
+    environment:
+      name: ${{ inputs.environment }}
+    concurrency:
+      group: clearent-deploy-${{ inputs.environment }}-${{ inputs.kubernetes_namespace }}-${{ inputs.application_name }}
+      cancel-in-progress: false
+    steps:
+      - name: Require central repository token
+        shell: pwsh
+        env:
+          CLEARENT_PLATFORM_READ_TOKEN: ${{ secrets.CLEARENT_PLATFORM_READ_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CLEARENT_PLATFORM_READ_TOKEN)) {
+            throw "CLEARENT_PLATFORM_READ_TOKEN is required to retrieve the pinned platform implementation."
+          }
+
+      - name: Check out application revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          path: application
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Check out pinned Clearent platform implementation
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: xplor-pay/github-actions
+          ref: ${{ needs.preflight.outputs.workflow_sha }}
+          token: ${{ secrets.CLEARENT_PLATFORM_READ_TOKEN }}
+          path: platform
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Run Clearent deployment transaction
+        id: deployment
+        continue-on-error: true
+        uses: ./platform/.github/actions/clearent-kubernetes-deploy
+        env:
+          CLEARENT_REPOSITORY_NAME: ${{ github.repository }}
+          CLEARENT_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          CLEARENT_DEPLOYMENT_ENVIRONMENT: ${{ inputs.environment }}
+        with:
+          platform-directory: ${{ github.workspace }}/platform
+          application-directory: ${{ github.workspace }}/application
+          workflow-repository: xplor-pay/github-actions
+          workflow-ref: ${{ needs.preflight.outputs.workflow_ref }}
+          workflow-sha: ${{ needs.preflight.outputs.workflow_sha }}
+          agave-package-read-token: ${{ secrets.AGAVE_AZURE_DEVOPS_PAT }}
+          kubeconfig-b64: ${{ secrets.CLEARENT_KUBECONFIG_B64 }}
+          expected-api-server-sha256: ${{ vars.CLEARENT_KUBERNETES_API_SERVER_SHA256 }}
+          environment: ${{ inputs.environment }}
+          application-name: ${{ inputs.application_name }}
+          application-type: ${{ inputs.application_type }}
+          application-framework: ${{ inputs.application_framework }}
+          kubernetes-namespace: ${{ inputs.kubernetes_namespace }}
+          image-tag: ${{ inputs.image_tag }}
+          replica-count: ${{ inputs.replica_count }}
+          application-size: ${{ inputs.application_size }}
+          service-classification: ${{ inputs.service_classification }}
+          health-check-path: ${{ inputs.health_check_path }}
+          health-check-port: ${{ inputs.health_check_port }}
+          cron-job-schedule: ${{ inputs.cron_job_schedule }}
+          cron-job-suspended: ${{ inputs.cron_job_suspended }}
+          java-options: ${{ inputs.java_options }}
+          ingress-subdomain: ${{ inputs.ingress_subdomain }}
+          ingress-domain: ${{ inputs.ingress_domain }}
+          ingress-path: ${{ inputs.ingress_path }}
+          ingress-path-2: ${{ inputs.ingress_path_2 }}
+          ingress-tls: ${{ inputs.ingress_tls }}
+          backend-tls: ${{ inputs.backend_tls }}
+          ingress-cert-secret: ${{ inputs.ingress_cert_secret }}
+          ingress-config-snippet: ${{ inputs.ingress_config_snippet }}
+          behind-edge-service: ${{ inputs.behind_edge_service }}
+          site-status: ${{ inputs.site_status }}
+          extra-env-vars: ${{ inputs.extra_env_vars }}
+          kerberos-enabled: ${{ inputs.kerberos_enabled }}
+          smb-mounts: ${{ inputs.smb_mounts }}
+          enable-agave: ${{ inputs.enable_agave }}
+          skip-kubernetes-tls-verify: ${{ inputs.skip_kubernetes_tls_verify }}
+
+      - name: Upload canonical deployment report
+        if: ${{ always() && steps.deployment.outputs.report-path != '' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: clearent-deployment-report-${{ inputs.application_name }}-${{ inputs.environment }}-${{ github.run_attempt }}
+          path: ${{ steps.deployment.outputs.report-path }}
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Remove temporary credentials and deployment files
+        if: ${{ always() }}
+        shell: pwsh
+        env:
+          CLEARENT_WORKING_DIRECTORY: ${{ steps.deployment.outputs.working-directory }}
+        run: |
+          if (
+            -not [string]::IsNullOrWhiteSpace($env:CLEARENT_WORKING_DIRECTORY) -and
+            (Test-Path -LiteralPath $env:CLEARENT_WORKING_DIRECTORY)
+          ) {
+            Remove-Item `
+              -LiteralPath $env:CLEARENT_WORKING_DIRECTORY `
+              -Recurse `
+              -Force
+          }
+
+      - name: Enforce deployment result
+        if: ${{ always() && steps.deployment.outcome != 'success' }}
+        shell: pwsh
+        run: |
+          throw "The Clearent deployment transaction failed. Review the canonical report and preceding evidence."

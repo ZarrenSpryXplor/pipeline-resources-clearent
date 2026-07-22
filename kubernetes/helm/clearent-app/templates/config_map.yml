@@ -1,0 +1,26 @@
+{{- $agaveEnabled := eq (include "common.agaveEnabled" .) "true" -}}
+{{- $files := .Files.Glob "config/templates/**" -}}
+{{- $pipeline := .Values.pipeline | default dict -}}
+{{- $platformEnvironment := get $pipeline "environment" | default "" | toString -}}
+
+{{- if and $agaveEnabled $files }}
+apiVersion: v1
+kind: ConfigMap
+
+metadata:
+  name: {{ include "app.configTemplatesName" . | quote }}
+  namespace: {{ include "app.namespace" . | quote }}
+  labels:
+    {{- include "common.labels" . | nindent 4 }}
+    agave.platform.xplor/managed: "true"
+    agave.platform.xplor/application: {{ include "app.name" . | quote }}
+    agave.platform.xplor/environment: {{ $platformEnvironment | quote }}
+  annotations:
+    {{- include "common.annotations" . | nindent 4 }}
+
+data:
+{{- range $path, $contents := $files }}
+  {{ base $path | quote }}: |-
+{{ $contents | toString | indent 4 }}
+{{- end }}
+{{- end }}

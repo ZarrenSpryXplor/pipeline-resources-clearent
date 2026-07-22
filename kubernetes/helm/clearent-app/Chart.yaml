@@ -1,0 +1,12 @@
+apiVersion: v2
+
+name: clearent-app
+
+description: >-
+  Shared Helm chart for deploying Clearent applications to Rancher RKE2,
+  including legacy Tequila and Agave configuration-management modes.
+
+type: application
+
+# Chart version. Increment whenever chart templates, defaults or schema change.
+version: 2.0.0
