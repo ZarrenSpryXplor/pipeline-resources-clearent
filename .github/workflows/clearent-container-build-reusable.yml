@@ -100,11 +100,24 @@ jobs:
             throw "application_name must be a canonical lowercase DNS label."
           }
           $repositoryParts = @($env:CLEARENT_REPOSITORY.Split("/", 2))
+          $applicationAliases = @{
+            "UnderwritingSystemDeterminerAPI" = "underwriting-system-determiner-api"
+          }
+          $expectedApplicationName = if (
+            $repositoryParts.Count -eq 2 -and
+            $applicationAliases.ContainsKey($repositoryParts[1])
+          ) {
+            $applicationAliases[$repositoryParts[1]]
+          } elseif ($repositoryParts.Count -eq 2) {
+            $repositoryParts[1].ToLowerInvariant()
+          } else {
+            ""
+          }
           if (
             $repositoryParts.Count -ne 2 -or
-            $repositoryParts[1] -ine $env:CLEARENT_APPLICATION_NAME
+            $expectedApplicationName -cne $env:CLEARENT_APPLICATION_NAME
           ) {
-            throw "application_name must match the calling repository name, ignoring case."
+            throw "application_name does not match the centrally approved identity for the calling repository."
           }
 
       - name: Resolve called workflow identity
